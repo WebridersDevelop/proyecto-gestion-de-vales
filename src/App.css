@@ -21,6 +21,11 @@ body, #root {
   margin-right: auto;
 }
 
+/* Asegura que el contenido principal no quede tapado por el menú inferior */
+.container, .main-content, .page-content {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 90px) !important;
+}
+
 /* Botones */
 .btn-primary, .btn-success, .btn-danger, .btn-warning {
   font-weight: 600;
@@ -414,4 +419,8 @@ h2, h4 {
   .nav-link span {
     font-size: 1.13rem;
   }
+}
+
+.bottom-spacer {
+  height: calc(env(safe-area-inset-bottom, 0) + 90px);
 }

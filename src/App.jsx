@@ -132,6 +132,7 @@ function AppContent() {
           </div>
         </nav>
       )}
+      <div className="bottom-spacer"></div>
       <InstallPWAButton />
     </>
   );
