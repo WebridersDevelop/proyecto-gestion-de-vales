@@ -9,7 +9,7 @@ import AdminOnly from './pages/AdminOnly';
 import CrearUsuario from './pages/CrearUsuario.jsx';
 import AprobarValesServicio from './pages/AprobarValesServicio';
 import './App.css';
-import React from 'react';
+import React, { useEffect } from 'react';
 import InstallPWAButton from './InstallPWAButton';
 import HomeObento from './pages/HomeObento';
 
@@ -22,14 +22,17 @@ function AppContent() {
   // Mostrar menú inferior solo si no es login
   const showBottomMenu = !isLogin;
 
-  // Redirección automática para peluquero
-  React.useEffect(() => {
-    if (
-      !loading &&
-      rol === 'peluquero' &&
-      !['/vales-servicio', '/vales-gasto', '/'].includes(location.pathname)
+  // Redirigir anfitrión siempre al inicio
+  useEffect(() => {
+    if (!loading && rol === 'anfitrion' &&
+      !['/', '/vales-servicio', '/vales-gasto', '/aprobar-vales-servicio', '/cuadre-diario'].includes(location.pathname)
     ) {
-      navigate('/vales-servicio', { replace: true });
+      navigate('/', { replace: true });
+    }
+    if (!loading && rol === 'peluquero' &&
+      !['/', '/vales-servicio', '/vales-gasto'].includes(location.pathname)
+    ) {
+      navigate('/', { replace: true });
     }
   }, [rol, location.pathname, navigate, loading]);
 
@@ -44,21 +47,35 @@ function AppContent() {
         <Routes>
           <Route path="/" element={rol ? <HomeObento /> : <Login />} />
           <Route path="/dashboard" element={
-            <AdminOnly>
-              <Dashboard />
-            </AdminOnly>
+            rol === 'admin'
+              ? <Dashboard />
+              : <HomeObento />
           } />
-          <Route path="/vales-servicio" element={<ValesServicio />} />
-          <Route path="/vales-gasto" element={<ValesGasto />} />
+          <Route path="/vales-servicio" element={
+            (rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero')
+              ? <ValesServicio />
+              : <HomeObento />
+          } />
+          <Route path="/vales-gasto" element={
+            (rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero')
+              ? <ValesGasto />
+              : <HomeObento />
+          } />
           <Route path="/cuadre-diario" element={
             (rol === 'admin' || rol === 'anfitrion')
               ? <CuadreDiario />
-              : <Login />
+              : <HomeObento />
           } />
-          <Route path="/crear-usuario" element={<CrearUsuario />} />
-          {(rol === 'admin' || rol === 'anfitrion') && (
-            <Route path="/aprobar-vales-servicio" element={<AprobarValesServicio />} />
-          )}
+          <Route path="/crear-usuario" element={
+            rol === 'admin'
+              ? <CrearUsuario />
+              : <HomeObento />
+          } />
+          <Route path="/aprobar-vales-servicio" element={
+            (rol === 'admin' || rol === 'anfitrion')
+              ? <AprobarValesServicio />
+              : <HomeObento />
+          } />
         </Routes>
       </main>
 

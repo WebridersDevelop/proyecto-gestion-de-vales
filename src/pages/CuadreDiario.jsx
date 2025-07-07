@@ -10,7 +10,7 @@ function CuadreDiario() {
   const [vales, setVales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '' });
+  const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '', local: '' });
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
@@ -130,6 +130,7 @@ function CuadreDiario() {
     if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
     if (filtros.tipo && v.tipo !== filtros.tipo) return false;
     if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
+    if (filtros.local && v.local !== filtros.local) return false;
     const fechaVale = v.fecha.toISOString().slice(0, 10);
     if (fechaVale < desde) return false;
     if (fechaVale > hasta) return false;
@@ -189,6 +190,14 @@ function CuadreDiario() {
                     <option value="aprobado">Aprobado</option>
                     <option value="pendiente">Pendiente</option>
                     <option value="rechazado">Rechazado</option>
+                  </Form.Select>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Local</Form.Label>
+                  <Form.Select name="local" value={filtros.local || ''} onChange={handleFiltro}>
+                    <option value="">Todos</option>
+                    <option value="La Tirana">La Tirana</option>
+                    <option value="Salvador Allende">Salvador Allende</option>
                   </Form.Select>
                 </Form.Group>
                 <Form.Group>
@@ -271,11 +280,23 @@ function CuadreDiario() {
                       </h5>
                       {/* Resumen por usuario */}
                       <div className="mb-2">
-                        <span style={{color:'#22c55e', fontWeight:600}}>Ingresos: ${lista.filter(v=>v.tipo==='Ingreso').reduce((a,v)=>a+Number(v.valor),0).toLocaleString()}</span>
+                        <span style={{color:'#22c55e', fontWeight:600}}>
+                          Ingresos: ${lista
+                            .filter(v => v.tipo === 'Ingreso' && v.estado !== 'rechazado')
+                            .reduce((a, v) => a + (Number(v.valor) || 0), 0)
+                            .toLocaleString()}
+                        </span>
                         {' | '}
-                        <span style={{color:'#dc3545', fontWeight:600}}>Egresos: ${lista.filter(v=>v.tipo==='Egreso').reduce((a,v)=>a+Number(v.valor),0).toLocaleString()}</span>
+                        <span style={{color:'#dc3545', fontWeight:600}}>
+                          Egresos: ${lista
+                            .filter(v => v.tipo === 'Egreso' && v.estado !== 'rechazado')
+                            .reduce((a, v) => a + (Number(v.valor) || 0), 0)
+                            .toLocaleString()}
+                        </span>
                         {' | '}
-                        <span style={{color:total>=0?'#22c55e':'#dc3545', fontWeight:600}}>Saldo: ${total.toLocaleString()}</span>
+                        <span style={{color:total>=0?'#22c55e':'#dc3545', fontWeight:600}}>
+                          Saldo: ${total.toLocaleString()}
+                        </span>
                       </div>
                       {vista === 'cards' ? (
                         <Row xs={1} md={2} lg={3} className="g-3">
@@ -317,6 +338,7 @@ function CuadreDiario() {
                                   )}
                                 </div>
                                 <div><b>Observación:</b> {vale.observacion || '-'}</div>
+                                <div><b>Local:</b> {vale.local || '-'}</div>
                                 {(rol === 'admin' || rol === 'anfitrion') && (
                                   <Button
                                     variant="danger"
@@ -346,6 +368,7 @@ function CuadreDiario() {
                                 <th>Tipo</th>
                                 <th>Servicio/Concepto</th>
                                 <th>Forma de Pago</th>
+                                <th>Local</th> {/* NUEVO */}
                                 <th>Monto</th>
                                 <th>Estado</th>
                                 <th>Aprobado por</th>
@@ -365,6 +388,7 @@ function CuadreDiario() {
                                   </td>
                                   <td>{vale.servicio || vale.concepto || '-'}</td>
                                   <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                                  <td>{vale.local || '-'}</td> {/* NUEVO */}
                                   <td style={{ color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
                                     {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
                                   </td>

@@ -16,6 +16,7 @@ function AprobarValesServicio() {
   const [accionModal, setAccionModal] = useState(''); // 'aprobar' o 'rechazar'
   const [observacion, setObservacion] = useState('');
   const [formaPago, setFormaPago] = useState('');
+  const [local, setLocal] = useState('');
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
@@ -53,11 +54,16 @@ function AprobarValesServicio() {
     setAccionModal(accion);
     setObservacion('');
     setFormaPago('');
+    setLocal('');
     setShowModal(true);
   };
 
   const handleConfirmarAccion = async () => {
     if (!valeActual) return;
+    if (!local) {
+      setMensaje('Selecciona el local');
+      return;
+    }
     if (accionModal === 'aprobar' && !formaPago) {
       setMensaje('Selecciona la forma de pago');
       return;
@@ -67,7 +73,7 @@ function AprobarValesServicio() {
         estado: accionModal === 'aprobar' ? 'aprobado' : 'rechazado',
         aprobadoPor: user.email,
         observacion: observacion || '',
-        ...(accionModal === 'aprobar' ? { formaPago } : {})
+        ...(accionModal === 'aprobar' ? { formaPago, local } : {})
       });
       setMensaje(accionModal === 'aprobar' ? 'Vale aprobado' : 'Vale rechazado');
       setShowModal(false);
@@ -94,6 +100,20 @@ function AprobarValesServicio() {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {(accionModal === 'aprobar' || accionModal === 'rechazar') && (
+            <Form.Group className="mb-3">
+              <Form.Label>Local <span style={{color:'red'}}>*</span></Form.Label>
+              <Form.Select
+                value={local}
+                onChange={e => setLocal(e.target.value)}
+                required
+              >
+                <option value="">Selecciona un local</option>
+                <option value="La Tirana">La Tirana</option>
+                <option value="Salvador Allende">Salvador Allende</option>
+              </Form.Select>
+            </Form.Group>
+          )}
           {accionModal === 'aprobar' && (
             <Form.Group className="mb-3">
               <Form.Label>Forma de Pago <span style={{color:'red'}}>*</span></Form.Label>
