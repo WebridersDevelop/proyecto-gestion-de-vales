@@ -84,6 +84,7 @@ function CrearUsuario() {
                 <Form.Label>Rol</Form.Label>
                 <Form.Select value={rolUsuario} onChange={e => setRolUsuario(e.target.value)}>
                   <option value="peluquero">Peluquero</option>
+                  <option value="anfitrion">Anfitrión</option>
                   <option value="admin">Administrador</option>
                 </Form.Select>
               </Form.Group>

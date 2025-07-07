@@ -13,6 +13,10 @@ function ValesGasto() {
   const [valesUsuario, setValesUsuario] = useState([]);
   const [formaPago, setFormaPago] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fechaFiltro, setFechaFiltro] = useState(() => {
+    const hoy = new Date();
+    return hoy.toISOString().slice(0, 10); // formato YYYY-MM-DD
+  });
 
   useEffect(() => {
     const fetchNombre = async () => {
@@ -89,6 +93,16 @@ function ValesGasto() {
     setLoading(false);
   };
 
+  // Filtro por fecha seleccionada
+  const valesFiltrados = valesUsuario.filter(vale => {
+    const fechaVale = vale.fecha.toISOString().slice(0, 10);
+    return fechaVale === fechaFiltro;
+  });
+
+  if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
+    return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
+  }
+
   return (
     <Row className="justify-content-center mt-4">
       <Col xs={12} md={10} lg={8} xl={7}>
@@ -100,7 +114,7 @@ function ValesGasto() {
                 <b>Usuario actual:</b> {nombreActual}
               </div>
             )}
-            {(rol === 'peluquero' || rol === 'admin') && (
+            {(rol === 'peluquero' || rol === 'admin' || rol === 'anfitrion') && (
               <Form onSubmit={handleSubmit} className="mb-4">
                 <Form.Group className="mb-3" controlId="concepto">
                   <Form.Label>Concepto</Form.Label>
@@ -147,6 +161,31 @@ function ValesGasto() {
               <>
                 <hr />
                 <h5 className="mb-3">Mis vales de gasto enviados</h5>
+                {/* Selector de fecha */}
+                <Form.Group className="mb-3" controlId="fechaFiltro">
+                  <Form.Label>Filtrar por fecha</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={fechaFiltro}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={e => setFechaFiltro(e.target.value)}
+                    style={{maxWidth: 200}}
+                  />
+                </Form.Group>
+                {/* Acumulado del día */}
+                {valesFiltrados.length > 0 && (
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 17,
+                      color: "#ef4444",
+                      marginBottom: 10,
+                      textAlign: "right"
+                    }}
+                  >
+                    Acumulado del día: ${valesFiltrados.reduce((acc, v) => acc + Number(v.valor), 0).toLocaleString()}
+                  </div>
+                )}
                 <div style={{overflowX: 'auto'}}>
                   <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
                     <thead>
@@ -161,12 +200,12 @@ function ValesGasto() {
                       </tr>
                     </thead>
                     <tbody>
-                      {valesUsuario.length === 0 ? (
+                      {valesFiltrados.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="text-center">No tienes vales de gasto enviados.</td>
+                          <td colSpan={7} className="text-center">No tienes vales de gasto enviados para esta fecha.</td>
                         </tr>
                       ) : (
-                        valesUsuario.map(vale => (
+                        valesFiltrados.map(vale => (
                           <tr key={vale.id}>
                             <td>{vale.fecha.toLocaleDateString()}</td>
                             <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>

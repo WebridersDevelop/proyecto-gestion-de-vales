@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form } from 'react-bootstrap';
+import { useMediaQuery } from 'react-responsive';
 
 function AprobarValesServicio() {
   const { user, rol } = useAuth();
@@ -12,6 +13,9 @@ function AprobarValesServicio() {
   const [showModal, setShowModal] = useState(false);
   const [accionVale, setAccionVale] = useState(null); // {vale, accion: 'aprobar'|'rechazar'}
   const [observacion, setObservacion] = useState('');
+
+  // Detecta móvil (menos de 768px)
+  const isMobile = useMediaQuery({ maxWidth: 767 });
 
   useEffect(() => {
     const fetchVales = async () => {
@@ -113,73 +117,128 @@ function AprobarValesServicio() {
             <Card.Body>
               <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Aprobar Vales de Servicio y Gasto</Card.Title>
               {mensaje && <Alert variant="info">{mensaje}</Alert>}
-              <div style={{overflowX: 'auto'}}>
-                <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Hora</th>
-                      <th>Tipo</th>
-                      <th>Servicio/Concepto</th>
-                      <th>Valor</th>
-                      <th>Peluquero</th>
-                      <th>Forma de Pago</th>
-                      <th>Observación</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {valesPendientes.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="text-center">No hay vales pendientes.</td>
-                      </tr>
-                    ) : valesPendientes.map(vale => (
-                      <tr key={vale.id}>
-                        <td>{vale.fecha.toLocaleDateString()}</td>
-                        <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td>
+              {isMobile ? (
+                <div>
+                  {valesPendientes.length === 0 ? (
+                    <Alert variant="info" className="text-center">No hay vales pendientes.</Alert>
+                  ) : (
+                    valesPendientes.map(vale => (
+                      <div className={`vale-card ${vale.tipo === 'gasto' ? 'egreso' : ''}`} key={vale.id} style={{marginBottom: 16}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                          <span style={{fontWeight: 600}}>{vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className={`badge ${vale.tipo === 'servicio' ? 'bg-primary' : 'bg-danger'}`}>
                             {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
                           </span>
-                        </td>
-                        <td>{vale.servicio || vale.concepto || '-'}</td>
-                        <td style={{fontWeight:600, color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'}}>
-                          ${Number(vale.valor).toLocaleString()}
-                        </td>
-                        <td>{vale.peluqueroNombre || vale.peluqueroEmail || '-'}</td>
-                        <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                        <td>
-                          {vale.observacion
-                            ? <span className="text-secondary">{vale.observacion}</span>
-                            : <span className="text-muted">-</span>
-                          }
-                        </td>
-                        <td>
+                        </div>
+                        <div><b>Servicio/Concepto:</b> {vale.servicio || vale.concepto || '-'}</div>
+                        <div><b>Valor:</b> <span style={{fontWeight:600, color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'}}>${Number(vale.valor).toLocaleString()}</span></div>
+                        <div><b>Peluquero:</b> {vale.peluqueroNombre || vale.peluqueroEmail || '-'}</div>
+                        <div><b>Forma de Pago:</b> {vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</div>
+                        <div><b>Observación:</b> {vale.observacion || <span className="text-muted">-</span>}</div>
+                        <div className="d-flex gap-2 mt-2">
                           <Button
                             size="sm"
                             variant="success"
-                            className="me-2"
                             style={{background: '#16a34a', borderColor: '#16a34a'}}
                             onClick={() => handleAccionVale(vale, 'aprobar')}
+                            className="flex-fill"
                           >
-                            <i className="bi bi-check-circle me-1"></i>
-                            Aprobar
+                            <i className="bi bi-check-circle me-1"></i>Aprobar
                           </Button>
                           <Button
                             size="sm"
                             variant="danger"
                             style={{background: '#ef4444', borderColor: '#ef4444'}}
                             onClick={() => handleAccionVale(vale, 'rechazar')}
+                            className="flex-fill"
                           >
-                            <i className="bi bi-x-circle me-1"></i>
-                            Rechazar
+                            <i className="bi bi-x-circle me-1"></i>Rechazar
                           </Button>
-                        </td>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    overflowX: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                    borderRadius: 12,
+                    border: '1px solid #e5e7eb',
+                    background: '#fff',
+                    marginBottom: 12,
+                    boxShadow: '0 2px 8px #0001'
+                  }}
+                >
+                  <Table striped bordered hover size="sm" responsive="xs" className="mb-0" style={{ minWidth: 700 }}>
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Servicio/Concepto</th>
+                        <th>Valor</th>
+                        <th>Peluquero</th>
+                        <th>Forma de Pago</th>
+                        <th>Observación</th>
+                        <th>Acciones</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {valesPendientes.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="text-center">No hay vales pendientes.</td>
+                        </tr>
+                      ) : valesPendientes.map(vale => (
+                        <tr key={vale.id}>
+                          <td>{vale.fecha.toLocaleDateString()}</td>
+                          <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td>
+                            <span className={`badge ${vale.tipo === 'servicio' ? 'bg-primary' : 'bg-danger'}`}>
+                              {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
+                            </span>
+                          </td>
+                          <td>{vale.servicio || vale.concepto || '-'}</td>
+                          <td style={{fontWeight:600, color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'}}>
+                            ${Number(vale.valor).toLocaleString()}
+                          </td>
+                          <td>{vale.peluqueroNombre || vale.peluqueroEmail || '-'}</td>
+                          <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                          <td>
+                            {vale.observacion
+                              ? <span className="text-secondary">{vale.observacion}</span>
+                              : <span className="text-muted">-</span>
+                            }
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column flex-md-row gap-2">
+                              <Button
+                                size="sm"
+                                variant="success"
+                                style={{background: '#16a34a', borderColor: '#16a34a', minWidth: 90}}
+                                onClick={() => handleAccionVale(vale, 'aprobar')}
+                              >
+                                <i className="bi bi-check-circle me-1"></i>
+                                Aprobar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                style={{background: '#ef4444', borderColor: '#ef4444', minWidth: 90}}
+                                onClick={() => handleAccionVale(vale, 'rechazar')}
+                              >
+                                <i className="bi bi-x-circle me-1"></i>
+                                Rechazar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>

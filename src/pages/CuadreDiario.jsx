@@ -3,16 +3,22 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { Card, Row, Col, Spinner, Alert, Table, Form, Button, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 function CuadreDiario() {
   const [vales, setVales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtros, setFiltros] = useState({ usuario: '' });
+  const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '' });
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
   const [vista, setVista] = useState('tabla'); // 'tabla' o 'cards'
+  // Ambos selectores de fecha, ambos por defecto el día actual
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [desde, setDesde] = useState(hoy);
+  const [hasta, setHasta] = useState(hoy);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,16 +84,55 @@ function CuadreDiario() {
     }
   };
 
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Resumen de Vales', 14, 16);
+
+    // Resumen general
+    doc.setFontSize(11);
+    doc.text(`Rango: ${desde} a ${hasta}`, 14, 24);
+    doc.text(`Ingresos: $${totalIngresos.toLocaleString()}`, 14, 32);
+    doc.text(`Egresos: $${totalEgresos.toLocaleString()}`, 14, 38);
+    doc.text(`Saldo Neto: $${saldoNeto.toLocaleString()}`, 14, 44);
+
+    // Tabla de vales
+    const rows = [];
+    valesFiltrados.forEach(v => {
+      rows.push([
+        v.fecha.toLocaleDateString(),
+        v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        v.tipo,
+        v.servicio || v.concepto || '-',
+        v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
+        Number(v.valor).toLocaleString(),
+        v.estado || 'pendiente',
+        v.aprobadoPor || '-',
+        v.peluqueroNombre || '-'
+      ]);
+    });
+
+    autoTable(doc, {
+      head: [['Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'Forma de Pago', 'Valor', 'Estado', 'Aprobado por', 'Usuario']],
+      body: rows,
+      startY: 50,
+      styles: { fontSize: 9 }
+    });
+
+    doc.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
+  };
+
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
-  // Filtra por usuario y otros filtros
+  // Filtrado por rango de fechas (incluye ambos extremos)
   const valesFiltrados = vales.filter(v => {
     if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
     if (filtros.tipo && v.tipo !== filtros.tipo) return false;
     if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
-    if (filtros.desde && v.fecha < new Date(filtros.desde)) return false;
-    if (filtros.hasta && v.fecha > new Date(filtros.hasta + 'T23:59:59')) return false;
+    const fechaVale = v.fecha.toISOString().slice(0, 10);
+    if (fechaVale < desde) return false;
+    if (fechaVale > hasta) return false;
     return true;
   });
 
@@ -141,11 +186,22 @@ function CuadreDiario() {
               </Form.Group>
               <Form.Group>
                 <Form.Label>Desde</Form.Label>
-                <Form.Control type="date" name="desde" value={filtros.desde || ''} onChange={handleFiltro} />
+                <Form.Control
+                  type="date"
+                  value={desde}
+                  max={hasta}
+                  onChange={e => setDesde(e.target.value)}
+                />
               </Form.Group>
               <Form.Group>
                 <Form.Label>Hasta</Form.Label>
-                <Form.Control type="date" name="hasta" value={filtros.hasta || ''} onChange={handleFiltro} />
+                <Form.Control
+                  type="date"
+                  value={hasta}
+                  min={desde}
+                  max={hoy}
+                  onChange={e => setHasta(e.target.value)}
+                />
               </Form.Group>
             </Form>
             {filtros.usuario && (
@@ -183,6 +239,9 @@ function CuadreDiario() {
                 </ToggleButton>
               </ToggleButtonGroup>
             </div>
+            <Button variant="outline-secondary" size="sm" className="mb-3" onClick={handleExportPDF}>
+              Descargar PDF del resumen
+            </Button>
             {Object.keys(agrupados).length === 0 ? (
               <Alert variant="info">No hay vales para mostrar.</Alert>
             ) : (

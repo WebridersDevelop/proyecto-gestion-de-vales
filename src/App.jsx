@@ -44,7 +44,7 @@ function AppContent() {
           <Route path="/" element={<Login />} />
         </Routes>
       ) : (
-        <div className="container mt-4" style={{ paddingBottom: 70 }}>
+        <div className="container" style={{ paddingBottom: 70 }}>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={
@@ -69,63 +69,63 @@ function AppContent() {
 
       {/* Menú inferior tipo app móvil, blanco y negro */}
       {showBottomMenu && (
-        <nav className="navbar bg-white border-top fixed-bottom">
-          <div className="container-fluid d-flex justify-content-around flex-nowrap overflow-auto" style={{maxWidth: '100vw'}}>
+        <nav className="bottom-nav shadow-sm">
+          <div className="bottom-nav-inner">
             {/* Dashboard: solo admin */}
             {rol === 'admin' && (
               <NavLink
-                className="nav-link text-center text-dark"
+                className="bottom-nav-link"
                 to="/dashboard"
               >
-                <i className="bi bi-speedometer2" style={{fontSize: 18}}></i><br />
-                <small style={{fontSize: 10}}>Dashboard</small>
+                <i className="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
               </NavLink>
             )}
             {/* Vales Servicio: admin, anfitrion, peluquero */}
             {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
-              <Link className="nav-link text-center text-dark" to="/vales-servicio">
-                <i className="bi bi-receipt" style={{fontSize: 22}}></i><br />
-                <small>Vales</small>
-              </Link>
+              <NavLink className="bottom-nav-link" to="/vales-servicio">
+                <i className="bi bi-receipt"></i>
+                <span>Vales</span>
+              </NavLink>
             )}
             {/* Vales Gasto: admin, anfitrion, peluquero */}
             {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
-              <Link className="nav-link text-center text-dark" to="/vales-gasto">
-                <i className="bi bi-cash-stack" style={{fontSize: 22}}></i><br />
-                <small>Gastos</small>
-              </Link>
+              <NavLink className="bottom-nav-link" to="/vales-gasto">
+                <i className="bi bi-cash-stack"></i>
+                <span>Gastos</span>
+              </NavLink>
             )}
             {/* Crear Usuario: solo admin */}
             {rol === 'admin' && (
-              <Link className="nav-link text-center text-dark" to="/crear-usuario">
-                <i className="bi bi-person-plus" style={{fontSize: 22}}></i><br />
-                <small>Crear Usuario</small>
-              </Link>
+              <NavLink className="bottom-nav-link" to="/crear-usuario">
+                <i className="bi bi-person-plus"></i>
+                <span>Crear</span>
+              </NavLink>
             )}
             {/* Aprobar: admin y anfitrion */}
             {(rol === 'admin' || rol === 'anfitrion') && (
-              <Link className="nav-link text-center text-dark" to="/aprobar-vales-servicio">
-                <i className="bi bi-check2-square" style={{fontSize: 22}}></i><br />
-                <small>Aprobar</small>
-              </Link>
+              <NavLink className="bottom-nav-link" to="/aprobar-vales-servicio">
+                <i className="bi bi-check2-square"></i>
+                <span>Aprobar</span>
+              </NavLink>
             )}
             {/* Cuadre Diario: admin y anfitrion */}
             {(rol === 'admin' || rol === 'anfitrion') && (
-              <Link className="nav-link text-center text-dark" to="/cuadre-diario">
-                <i className="bi bi-table" style={{fontSize: 22}}></i><br />
-                <small>Cuadre</small>
-              </Link>
+              <NavLink className="bottom-nav-link" to="/cuadre-diario">
+                <i className="bi bi-table"></i>
+                <span>Cuadre</span>
+              </NavLink>
             )}
             {/* Logout: todos los roles */}
             {rol && (
               <button
-                className="nav-link text-center text-dark border-0 bg-transparent"
+                className="bottom-nav-link border-0 bg-transparent"
                 style={{outline: 'none'}}
                 onClick={logout}
                 title="Cerrar sesión"
               >
-                <i className="bi bi-box-arrow-right" style={{fontSize: 22}}></i><br />
-                <small>Salir</small>
+                <i className="bi bi-box-arrow-right"></i>
+                <span>Salir</span>
               </button>
             )}
           </div>
