@@ -10,6 +10,7 @@ import CrearUsuario from './pages/CrearUsuario.jsx';
 import AprobarValesServicio from './pages/AprobarValesServicio';
 import './App.css';
 import React from 'react';
+import InstallPWAButton from './InstallPWAButton';
 
 function AppContent() {
   const location = useLocation();
@@ -131,6 +132,7 @@ function AppContent() {
           </div>
         </nav>
       )}
+      <InstallPWAButton />
     </>
   );
 }
