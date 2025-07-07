@@ -1,6 +1,4 @@
 {
-  "buildCommand": "cd peluqueria-app && npm install && npm run build",
-  "outputDirectory": "peluqueria-app/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ]
