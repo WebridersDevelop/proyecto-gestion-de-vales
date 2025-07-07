@@ -1,0 +1,100 @@
+# Peluquería App
+
+Aplicación web para la gestión de vales de servicio y gasto en una peluquería, con control de caja y cuadre diario.
+
+## 🎯 Objetivo
+
+Desarrollar una app web en React (Vite + Bootstrap) que permita:
+
+- Registrar y controlar vales de servicio emitidos por peluqueros y pagados en caja.
+- Registrar vales de gasto solicitados por peluqueros (compra de productos, herramientas, etc.).
+- Realizar el cuadre diario para calcular pagos por peluquero considerando ingresos y egresos.
+- Autenticación por rol: peluquero, cajero, administrador.
+
+## 🧱 Arquitectura
+
+- **Frontend:** React + Vite + Bootstrap
+- **Backend:** Funciones serverless en Vercel (`/api`)
+- **Base de datos:** MongoDB Atlas
+- **Hosting:** Vercel
+
+## 📦 Estructura del proyecto
+
+```
+/peluqueria-app
+├─ /src
+│  ├─ /components        # Componentes UI reutilizables
+│  ├─ /pages             # Páginas principales
+│  ├─ /services          # Funciones para llamar a la API
+│  ├─ /context           # Contextos (Auth, UI)
+│  └─ main.jsx
+├─ /api
+│  └─ vales-servicio.js  # Funciones serverless con MongoDB
+│  └─ vales-gasto.js     # ...
+├─ .env
+├─ index.html
+├─ vite.config.js
+```
+
+## 📚 Colecciones en MongoDB
+
+### vales_servicio
+
+```json
+{
+  "_id": "...",
+  "peluquero": "Luis",
+  "servicio": "Corte",
+  "valor": 12000,
+  "fecha": "2025-07-06T14:00:00Z",
+  "estado": "pendiente" // o "pagado"
+}
+```
+
+### vales_gasto
+
+```json
+{
+  "_id": "...",
+  "peluquero": "Luis",
+  "motivo": "Compra de máquina",
+  "valor": 30000,
+  "fecha": "2025-07-06T13:00:00Z",
+  "estado": "pendiente" // o "autorizado", "descontado"
+}
+```
+
+### usuarios
+
+```json
+{
+  "_id": "...",
+  "nombre": "Luis",
+  "email": "...",
+  "rol": "peluquero" // o "cajero", "admin"
+}
+```
+
+## 🔁 Flujo de la aplicación
+
+1. Peluquero crea vale de servicio → cliente lo lleva a caja.
+2. Cajero valida el vale y lo marca como pagado.
+3. Administrador revisa cuadre diario con ingresos y egresos.
+4. Peluquero puede crear vales de gasto (descuento/compra).
+5. El sistema calcula total trabajado - gastos para el pago del día.
+
+## 🧠 Escalabilidad
+
+- Uso de roles desde el inicio.
+- Separación clara entre frontend y backend.
+- Control de estados de los vales.
+- Documentación mínima (README, modelos, rutas).
+- Posibilidad futura de migrar a backend Express si se requiere.
+
+---
+
+¿Listo para comenzar?  
+1. Clona el repositorio  
+2. Instala dependencias  
+3. Configura tu archivo `.env` con las credenciales de MongoDB  
+4.
