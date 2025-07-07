@@ -78,23 +78,36 @@ body, #root {
   box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
   border-radius: 18px 18px 0 0;
   padding-top: 0.3rem;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
   z-index: 1000;
+  height: 74px;
+  min-height: 74px;
+  display: flex;
+  align-items: center;
 }
+
 .navbar.fixed-bottom .nav-link {
   color: #181818 !important;
   font-weight: 600;
-  font-size: 0.98em;
-  padding: 0.2rem 0.5rem;
+  font-size: 1.08em;
+  padding: 0.3rem 0.5rem 0 0.5rem;
   border-radius: 8px;
   transition: background 0.15s, color 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+  min-height: 54px;
+  justify-content: center;
 }
+
 .navbar.fixed-bottom .nav-link.active,
 .navbar.fixed-bottom .nav-link:focus,
 .navbar.fixed-bottom .nav-link:hover {
   background: #181818 !important;
   color: #fff !important;
 }
+
 .nav-link {
   font-weight: 600;
   font-size: 13px;
@@ -108,6 +121,12 @@ body, #root {
 .nav-link i {
   display: block;
   margin-bottom: 2px;
+  font-size: 1.7rem;
+}
+.nav-link span {
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin-top: 1px;
 }
 
 /* Login */
@@ -328,4 +347,71 @@ h2, h4 {
   color: #ef4444;
   font-weight: 700;
   font-size: 18px;
+}
+
+/* Menú inferior mejorado para móvil */
+.navbar.fixed-bottom {
+  background: #fff !important;
+  border-top: 1.5px solid #e0e0e0 !important;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
+  border-radius: 18px 18px 0 0;
+  padding-top: 0.3rem;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
+  z-index: 1000;
+  height: 74px;
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+}
+
+.navbar.fixed-bottom .nav-link {
+  color: #181818 !important;
+  font-weight: 600;
+  font-size: 1.08em;
+  padding: 0.3rem 0.5rem 0 0.5rem;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+  min-height: 54px;
+  justify-content: center;
+}
+
+.navbar.fixed-bottom .nav-link.active,
+.navbar.fixed-bottom .nav-link:focus,
+.navbar.fixed-bottom .nav-link:hover {
+  background: #181818 !important;
+  color: #fff !important;
+}
+
+.nav-link i {
+  font-size: 1.7rem;
+  margin-bottom: 1px;
+}
+
+.nav-link span {
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+/* Responsive: aún más grande en pantallas pequeñas */
+@media (max-width: 600px) {
+  .navbar.fixed-bottom {
+    height: 84px;
+    min-height: 84px;
+  }
+  .navbar.fixed-bottom .nav-link {
+    font-size: 1.18em;
+    min-width: 64px;
+    min-height: 60px;
+  }
+  .nav-link i {
+    font-size: 2rem;
+  }
+  .nav-link span {
+    font-size: 1.13rem;
+  }
 }
