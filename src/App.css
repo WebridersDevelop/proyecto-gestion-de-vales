@@ -31,6 +31,11 @@ body {
   padding-bottom: 120px !important; /* Ajusta según el alto de tu menú inferior */
 }
 
+/* Cuadre diario */
+.cuadre-diario-container {
+  padding-bottom: 120px !important; /* Ajusta según el alto de tu menú inferior */
+}
+
 /* Botones */
 .btn-primary, .btn-success, .btn-danger, .btn-warning {
   font-weight: 600;

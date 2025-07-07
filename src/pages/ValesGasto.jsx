@@ -172,7 +172,10 @@ function ValesGasto() {
                         textAlign: "right"
                       }}
                     >
-                      Acumulado del día: ${valesFiltrados.reduce((acc, v) => acc + Number(v.valor), 0).toLocaleString()}
+                      Acumulado del día: ${valesFiltrados
+                        .filter(v => v.estado === 'aprobado')
+                        .reduce((acc, v) => acc + (Number(v.valor) || 0), 0)
+                        .toLocaleString()}
                     </div>
                   )}
                   <div style={{overflowX: 'auto'}}>

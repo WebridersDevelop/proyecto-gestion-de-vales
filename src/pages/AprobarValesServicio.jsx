@@ -202,15 +202,13 @@ function AprobarValesServicio() {
                         <th>Servicio/Concepto</th>
                         <th>Valor</th>
                         <th>Peluquero</th>
-                        <th>Forma de Pago</th>
-                        <th>Observación</th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {valesPendientes.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="text-center">No hay vales pendientes.</td>
+                          <td colSpan={7} className="text-center">No hay vales pendientes.</td>
                         </tr>
                       ) : valesPendientes.map(vale => (
                         <tr key={vale.id}>
@@ -226,13 +224,6 @@ function AprobarValesServicio() {
                             ${Number(vale.valor).toLocaleString()}
                           </td>
                           <td>{vale.peluqueroNombre || vale.peluqueroEmail || '-'}</td>
-                          <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                          <td>
-                            {vale.observacion
-                              ? <span className="text-secondary">{vale.observacion}</span>
-                              : <span className="text-muted">-</span>
-                            }
-                          </td>
                           <td>
                             <div className="d-flex flex-column flex-md-row gap-2">
                               <Button
