@@ -1,4 +1,4 @@
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'; // agrega useNavigate
+import { Routes, Route, Link, useLocation, useNavigate, NavLink } from 'react-router-dom'; // agrega useNavigate
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -73,10 +73,13 @@ function AppContent() {
           <div className="container-fluid d-flex justify-content-around flex-nowrap overflow-auto" style={{maxWidth: '100vw'}}>
             {/* Dashboard: solo admin */}
             {rol === 'admin' && (
-              <Link className="nav-link text-center text-dark" to="/dashboard">
+              <NavLink
+                className="nav-link text-center text-dark"
+                to="/dashboard"
+              >
                 <i className="bi bi-speedometer2" style={{fontSize: 18}}></i><br />
                 <small style={{fontSize: 10}}>Dashboard</small>
-              </Link>
+              </NavLink>
             )}
             {/* Vales Servicio: admin, anfitrion, peluquero */}
             {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (

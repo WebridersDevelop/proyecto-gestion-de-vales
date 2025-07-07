@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore'; // <-- agrega deleteDoc
-import { Card, Row, Col, Spinner, Alert, Table, Form, Button } from 'react-bootstrap'; // <-- agrega Button
-import { useAuth } from '../context/AuthContext'; // <-- si tienes control de roles
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { Card, Row, Col, Spinner, Alert, Table, Form, Button, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
+import { useAuth } from '../context/AuthContext';
 
 function CuadreDiario() {
   const [vales, setVales] = useState([]);
@@ -11,12 +11,12 @@ function CuadreDiario() {
   const [filtros, setFiltros] = useState({ usuario: '' });
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
-  const { rol } = useAuth ? useAuth() : { rol: null }; // Si tienes AuthContext
+  const { rol } = useAuth ? useAuth() : { rol: null };
+  const [vista, setVista] = useState('tabla'); // 'tabla' o 'cards'
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Trae todos los vales de servicio y gasto
         const valesServicioSnap = await getDocs(collection(db, 'vales_servicio'));
         const valesGastoSnap = await getDocs(collection(db, 'vales_gasto'));
         const valesServicio = [];
@@ -81,10 +81,15 @@ function CuadreDiario() {
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
-  // Filtra por usuario si se selecciona
-  const valesFiltrados = filtros.usuario
-    ? vales.filter(v => v.peluqueroEmail === filtros.usuario)
-    : vales;
+  // Filtra por usuario y otros filtros
+  const valesFiltrados = vales.filter(v => {
+    if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
+    if (filtros.tipo && v.tipo !== filtros.tipo) return false;
+    if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
+    if (filtros.desde && v.fecha < new Date(filtros.desde)) return false;
+    if (filtros.hasta && v.fecha > new Date(filtros.hasta + 'T23:59:59')) return false;
+    return true;
+  });
 
   // Resumen contable
   const totalIngresos = valesFiltrados.filter(v => v.tipo === 'Ingreso').reduce((acc, v) => acc + Number(v.valor), 0);
@@ -102,9 +107,9 @@ function CuadreDiario() {
   return (
     <Row className="justify-content-center mt-4">
       <Col xs={12} md={11} lg={10}>
-        <Card>
+        <Card className="shadow-sm">
           <Card.Body>
-            <Card.Title className="mb-4 text-center">Listado de Vales</Card.Title>
+            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Listado de Vales</Card.Title>
             <Form className="mb-4 d-flex flex-wrap gap-3 justify-content-center">
               <Form.Group>
                 <Form.Label>Usuario</Form.Label>
@@ -117,6 +122,31 @@ function CuadreDiario() {
                   ))}
                 </Form.Select>
               </Form.Group>
+              <Form.Group>
+                <Form.Label>Tipo</Form.Label>
+                <Form.Select name="tipo" value={filtros.tipo || ''} onChange={handleFiltro}>
+                  <option value="">Todos</option>
+                  <option value="Ingreso">Ingreso</option>
+                  <option value="Egreso">Egreso</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Estado</Form.Label>
+                <Form.Select name="estado" value={filtros.estado || ''} onChange={handleFiltro}>
+                  <option value="">Todos</option>
+                  <option value="aprobado">Aprobado</option>
+                  <option value="pendiente">Pendiente</option>
+                  <option value="rechazado">Rechazado</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Desde</Form.Label>
+                <Form.Control type="date" name="desde" value={filtros.desde || ''} onChange={handleFiltro} />
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Hasta</Form.Label>
+                <Form.Control type="date" name="hasta" value={filtros.hasta || ''} onChange={handleFiltro} />
+              </Form.Group>
             </Form>
             {filtros.usuario && (
               <div style={{ textAlign: 'center', marginBottom: 15 }}>
@@ -125,24 +155,34 @@ function CuadreDiario() {
             )}
             <Row className="mb-3">
               <Col>
-                <Card>
+                <Card className="border-0 shadow-sm" style={{borderRadius: 18}}>
                   <Card.Body style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
                     <div>
                       <div><b>Ingresos</b></div>
-                      <div style={{ color: 'green', fontSize: 20 }}>${totalIngresos.toLocaleString()}</div>
+                      <div style={{ color: '#22c55e', fontSize: 20, fontWeight: 600 }}>${totalIngresos.toLocaleString()}</div>
                     </div>
                     <div>
                       <div><b>Egresos</b></div>
-                      <div style={{ color: 'red', fontSize: 20 }}>${totalEgresos.toLocaleString()}</div>
+                      <div style={{ color: '#dc3545', fontSize: 20, fontWeight: 600 }}>${totalEgresos.toLocaleString()}</div>
                     </div>
                     <div>
                       <div><b>Saldo Neto</b></div>
-                      <div style={{ color: saldoNeto >= 0 ? 'green' : 'red', fontSize: 20 }}>${saldoNeto.toLocaleString()}</div>
+                      <div style={{ color: saldoNeto >= 0 ? '#22c55e' : '#dc3545', fontSize: 20, fontWeight: 600 }}>${saldoNeto.toLocaleString()}</div>
                     </div>
                   </Card.Body>
                 </Card>
               </Col>
             </Row>
+            <div className="mb-3 text-center">
+              <ToggleButtonGroup type="radio" name="vista" value={vista} onChange={setVista}>
+                <ToggleButton id="vista-tabla" value="tabla" variant="outline-primary" size="sm">
+                  Tabla
+                </ToggleButton>
+                <ToggleButton id="vista-cards" value="cards" variant="outline-primary" size="sm">
+                  Tarjetas
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </div>
             {Object.keys(agrupados).length === 0 ? (
               <Alert variant="info">No hay vales para mostrar.</Alert>
             ) : (
@@ -150,63 +190,165 @@ function CuadreDiario() {
                 const lista = agrupados[email].sort((a, b) => b.fecha - a.fecha);
                 const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || '';
                 const total = lista.reduce((acc, v) => acc + (v.tipo === 'Ingreso' ? v.valor : -v.valor), 0);
+
                 return (
                   <div key={email} className="mb-5">
-                    <h5>
+                    <h5 style={{fontWeight: 600, marginBottom: 12}}>
                       {filtros.usuario
                         ? (nombresUsuarios[email] ? `${nombresUsuarios[email]} (${email})` : email)
                         : email}
                     </h5>
-                    <div style={{overflowX: 'auto'}}>
-                      <Table striped bordered hover size="sm" responsive="sm">
-                        <thead>
-                          <tr>
-                            <th>Fecha</th>
-                            <th>Hora</th>
-                            <th>Tipo</th>
-                            <th>Servicio/Concepto</th>
-                            <th>Forma de Pago</th>
-                            <th>Monto</th>
-                            <th>Estado</th>
-                            <th>Aprobado por</th>
-                            <th>Observación</th> {/* <-- Nueva columna */}
-                            {(rol === 'admin' || rol === 'anfitrion') && <th>Acciones</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lista.map(vale => (
-                            <tr key={vale.id}>
-                              <td>{vale.fecha.toLocaleDateString()}</td>
-                              <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td>{vale.tipo}</td>
-                              <td>{vale.servicio || vale.concepto || ''}</td>
-                              <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                              <td style={{ color: vale.tipo === 'Ingreso' ? 'green' : 'red' }}>
-                                {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor).toLocaleString()}
-                              </td>
-                              <td>{vale.estado || 'pendiente'}</td>
-                              <td>{vale.aprobadoPor || '-'}</td>
-                              <td>{vale.observacion || '-'}</td> {/* <-- Aquí se muestra la observación */}
-                              {(rol === 'admin' || rol === 'anfitrion') && (
-                                <td>
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => handleEliminar(vale)}
-                                  >
-                                    Eliminar
-                                  </Button>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                          <tr>
-                            <td colSpan={7} className="text-end"><b>Total</b></td>
-                            <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 3 : 2}><b>${total.toLocaleString()}</b></td>
-                          </tr>
-                        </tbody>
-                      </Table>
+                    {/* Resumen por usuario */}
+                    <div className="mb-2">
+                      <span style={{color:'#22c55e', fontWeight:600}}>Ingresos: ${lista.filter(v=>v.tipo==='Ingreso').reduce((a,v)=>a+Number(v.valor),0).toLocaleString()}</span>
+                      {' | '}
+                      <span style={{color:'#dc3545', fontWeight:600}}>Egresos: ${lista.filter(v=>v.tipo==='Egreso').reduce((a,v)=>a+Number(v.valor),0).toLocaleString()}</span>
+                      {' | '}
+                      <span style={{color:total>=0?'#22c55e':'#dc3545', fontWeight:600}}>Saldo: ${total.toLocaleString()}</span>
                     </div>
+                    {vista === 'cards' ? (
+                      <Row xs={1} md={2} lg={3} className="g-3">
+                        {lista.map(vale => (
+                          <Col key={vale.id}>
+                            <div className={`vale-card ${vale.tipo === 'Egreso' ? 'egreso' : ''}`}>
+                              <div>
+                                <b>{vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'} ms-2`}>
+                                  {vale.tipo}
+                                </span>
+                                <span className={`badge bg-secondary ms-2`}>
+                                  {vale.estado === 'aprobado'
+                                    ? 'Aprobado'
+                                    : vale.estado === 'rechazado'
+                                    ? 'Rechazado'
+                                    : 'Pendiente'}
+                                </span>
+                              </div>
+                              <div><b>Servicio/Concepto:</b> {vale.servicio || vale.concepto || '-'}</div>
+                              <div><b>Forma de Pago:</b> {vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</div>
+                              <div className={`monto ${vale.tipo === 'Ingreso' ? 'ingreso' : 'egreso'}`}>
+                                {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor).toLocaleString()}
+                              </div>
+                              <div>
+                                <b>Aprobado por:</b>{' '}
+                                {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#22c55e', fontWeight: 600 }}>
+                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#dc3545', fontWeight: 600 }}>
+                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : (
+                                  <span className="text-secondary">-</span>
+                                )}
+                              </div>
+                              <div><b>Observación:</b> {vale.observacion || '-'}</div>
+                              {(rol === 'admin' || rol === 'anfitrion') && (
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  className="mt-2"
+                                  onClick={() => handleEliminar(vale)}
+                                >
+                                  Eliminar
+                                </Button>
+                              )}
+                            </div>
+                          </Col>
+                        ))}
+                        <Col xs={12}>
+                          <div className="text-end mt-2" style={{fontWeight: 'bold', fontSize: 16}}>
+                            Total: <span style={{color: total >= 0 ? '#22c55e' : '#dc3545'}}>${total.toLocaleString()}</span>
+                          </div>
+                        </Col>
+                      </Row>
+                    ) : (
+                      <div style={{overflowX: 'auto', borderBottom: '2px solid #eee'}}>
+                        <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th>
+                              <th>Hora</th>
+                              <th>Tipo</th>
+                              <th>Servicio/Concepto</th>
+                              <th>Forma de Pago</th>
+                              <th>Monto</th>
+                              <th>Estado</th>
+                              <th>Aprobado por</th>
+                              <th>Observación</th>
+                              {(rol === 'admin' || rol === 'anfitrion') && <th>Acciones</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lista.map(vale => (
+                              <tr key={vale.id}>
+                                <td>{vale.fecha.toLocaleDateString()}</td>
+                                <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                <td>
+                                  <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
+                                    {vale.tipo}
+                                  </span>
+                                </td>
+                                <td>{vale.servicio || vale.concepto || '-'}</td>
+                                <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                                <td style={{ color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
+                                  {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor).toLocaleString()}
+                                </td>
+                                <td>
+                                  <span className={`badge ${
+                                    vale.estado === 'aprobado'
+                                      ? 'bg-success'
+                                      : vale.estado === 'rechazado'
+                                      ? 'bg-danger'
+                                      : 'bg-warning text-dark'
+                                  }`}>
+                                    {vale.estado === 'aprobado'
+                                      ? 'Aprobado'
+                                      : vale.estado === 'rechazado'
+                                      ? 'Rechazado'
+                                      : 'Pendiente'}
+                                  </span>
+                                </td>
+                                <td>
+                                  {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#22c55e', fontWeight: 600 }}>
+                                      <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                      {vale.aprobadoPor}
+                                    </span>
+                                  ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#dc3545', fontWeight: 600 }}>
+                                      <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                      {vale.aprobadoPor}
+                                    </span>
+                                  ) : (
+                                    <span className="text-secondary">-</span>
+                                  )}
+                                </td>
+                                <td>{vale.observacion || '-'}</td>
+                                {(rol === 'admin' || rol === 'anfitrion') && (
+                                  <td>
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      onClick={() => handleEliminar(vale)}
+                                    >
+                                      Eliminar
+                                    </Button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                            <tr>
+                              <td colSpan={7} className="text-end"><b>Total</b></td>
+                              <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 3 : 2}><b>${total.toLocaleString()}</b></td>
+                            </tr>
+                          </tbody>
+                        </Table>
+                      </div>
+                    )}
                   </div>
                 );
               })

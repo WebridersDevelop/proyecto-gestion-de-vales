@@ -11,18 +11,20 @@ function CrearUsuario() {
   const [rolUsuario, setRolUsuario] = useState('peluquero');
   const [nombre, setNombre] = useState('');
   const [mensaje, setMensaje] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Solo admin puede ver este formulario
-  if (rol !== 'admin') return <Alert variant="danger">No autorizado</Alert>;
+  if (rol !== 'admin') return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !uid || !rolUsuario || !nombre) {
       setMensaje('Completa todos los campos');
+      setTimeout(() => setMensaje(''), 3000);
       return;
     }
+    setLoading(true);
     try {
-      // Crea el documento en la colección usuarios con el UID como ID
       await setDoc(doc(collection(db, 'usuarios'), uid), {
         email,
         nombre,
@@ -36,15 +38,16 @@ function CrearUsuario() {
     } catch (err) {
       setMensaje('Error al crear usuario');
     }
+    setLoading(false);
     setTimeout(() => setMensaje(''), 3000);
   };
 
   return (
     <Row className="justify-content-center mt-4">
       <Col xs={12} md={8} lg={6}>
-        <Card>
+        <Card className="shadow-sm">
           <Card.Body>
-            <Card.Title className="mb-4 text-center">Crear Usuario</Card.Title>
+            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Crear Usuario</Card.Title>
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3" controlId="uid">
                 <Form.Label>UID (de Firebase Auth)</Form.Label>
@@ -53,6 +56,7 @@ function CrearUsuario() {
                   placeholder="UID del usuario"
                   value={uid}
                   onChange={e => setUid(e.target.value)}
+                  autoFocus
                 />
                 <Form.Text>
                   El UID se obtiene al registrar el usuario en Firebase Authentication.
@@ -84,11 +88,11 @@ function CrearUsuario() {
                 </Form.Select>
               </Form.Group>
               <div className="d-grid">
-                <Button variant="success" type="submit">
-                  Crear Usuario
+                <Button variant="success" type="submit" disabled={loading} style={{background: '#16a34a', borderColor: '#16a34a'}}>
+                  {loading ? "Creando..." : "Crear Usuario"}
                 </Button>
               </div>
-              {mensaje && <Alert className="mt-3" variant="info">{mensaje}</Alert>}
+              {mensaje && <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>{mensaje}</Alert>}
             </Form>
           </Card.Body>
         </Card>

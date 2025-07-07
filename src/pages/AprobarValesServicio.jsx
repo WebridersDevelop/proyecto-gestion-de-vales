@@ -9,8 +9,6 @@ function AprobarValesServicio() {
   const [valesPendientes, setValesPendientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mensaje, setMensaje] = useState('');
-
-  // Nuevo: estados para modal de observación
   const [showModal, setShowModal] = useState(false);
   const [accionVale, setAccionVale] = useState(null); // {vale, accion: 'aprobar'|'rechazar'}
   const [observacion, setObservacion] = useState('');
@@ -44,42 +42,13 @@ function AprobarValesServicio() {
     fetchVales();
   }, [mensaje]);
 
-  const aprobarVale = async (vale) => {
-    try {
-      await updateDoc(doc(db, vale.coleccion, vale.id), {
-        estado: 'aprobado',
-        aprobadoPor: user.email
-      });
-      setMensaje('Vale aprobado');
-      setTimeout(() => setMensaje(''), 1500);
-    } catch {
-      setMensaje('Error al aprobar');
-      setTimeout(() => setMensaje(''), 1500);
-    }
-  };
-
-  const rechazarVale = async (vale) => {
-    try {
-      await updateDoc(doc(db, vale.coleccion, vale.id), {
-        estado: 'rechazado',
-        aprobadoPor: user.email
-      });
-      setMensaje('Vale rechazado');
-      setTimeout(() => setMensaje(''), 1500);
-    } catch {
-      setMensaje('Error al rechazar');
-      setTimeout(() => setMensaje(''), 1500);
-    }
-  };
-
-  // Nuevo: función para abrir el modal
+  // Modal para aprobar/rechazar con observación
   const handleAccionVale = (vale, accion) => {
     setAccionVale({ vale, accion });
     setObservacion('');
     setShowModal(true);
   };
 
-  // Nuevo: función para confirmar la acción con observación
   const handleConfirmarAccion = async () => {
     if (!accionVale) return;
     const { vale, accion } = accionVale;
@@ -100,7 +69,6 @@ function AprobarValesServicio() {
   };
 
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
-
   if (rol !== 'admin' && rol !== 'anfitrion') {
     return <Alert variant="danger" className="mt-4 text-center">No tienes permisos para aprobar vales.</Alert>;
   }
@@ -134,67 +102,84 @@ function AprobarValesServicio() {
             variant={accionVale?.accion === 'aprobar' ? 'success' : 'danger'}
             onClick={handleConfirmarAccion}
           >
-            {accionVale?.accion === 'aprobar' ? 'Aprobar' : 'Rechazar'}
+            {accionVale?.accion === 'aprobar' ? <><i className="bi bi-check-circle me-1"></i>Aprobar</> : <><i className="bi bi-x-circle me-1"></i>Rechazar</>}
           </Button>
         </Modal.Footer>
       </Modal>
 
       <Row className="justify-content-center mt-4">
-        <Col xs={12} md={10} lg={8}>
-          <Card>
+        <Col xs={12} md={11} lg={10}>
+          <Card className="shadow-sm">
             <Card.Body>
-              <Card.Title className="mb-4 text-center">Aprobar Vales de Servicio y Gasto</Card.Title>
+              <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Aprobar Vales de Servicio y Gasto</Card.Title>
               {mensaje && <Alert variant="info">{mensaje}</Alert>}
-              <Table striped bordered hover size="sm" responsive="sm">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Tipo</th>
-                    <th>Servicio/Concepto</th>
-                    <th>Valor</th>
-                    <th>Peluquero</th>
-                    <th>Forma de Pago</th>
-                    <th>Observación</th> {/* <-- Nueva columna */}
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {valesPendientes.length === 0 ? (
+              <div style={{overflowX: 'auto'}}>
+                <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
+                  <thead>
                     <tr>
-                      <td colSpan={9} className="text-center">No hay vales pendientes.</td>
+                      <th>Fecha</th>
+                      <th>Hora</th>
+                      <th>Tipo</th>
+                      <th>Servicio/Concepto</th>
+                      <th>Valor</th>
+                      <th>Peluquero</th>
+                      <th>Forma de Pago</th>
+                      <th>Observación</th>
+                      <th>Acciones</th>
                     </tr>
-                  ) : valesPendientes.map(vale => (
-                    <tr key={vale.id}>
-                      <td>{vale.fecha.toLocaleDateString()}</td>
-                      <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td>{vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}</td>
-                      <td>{vale.servicio || vale.concepto || ''}</td>
-                      <td>${Number(vale.valor).toLocaleString()}</td>
-                      <td>{vale.peluqueroNombre || vale.peluqueroEmail || '-'}</td>
-                      <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                      <td>{vale.observacion || '-'}</td> {/* <-- Aquí se muestra la observación */}
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="success"
-                          className="me-2"
-                          onClick={() => handleAccionVale(vale, 'aprobar')}
-                        >
-                          Aprobar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => handleAccionVale(vale, 'rechazar')}
-                        >
-                          Rechazar
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
+                  </thead>
+                  <tbody>
+                    {valesPendientes.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center">No hay vales pendientes.</td>
+                      </tr>
+                    ) : valesPendientes.map(vale => (
+                      <tr key={vale.id}>
+                        <td>{vale.fecha.toLocaleDateString()}</td>
+                        <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>
+                          <span className={`badge ${vale.tipo === 'servicio' ? 'bg-primary' : 'bg-danger'}`}>
+                            {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
+                          </span>
+                        </td>
+                        <td>{vale.servicio || vale.concepto || '-'}</td>
+                        <td style={{fontWeight:600, color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'}}>
+                          ${Number(vale.valor).toLocaleString()}
+                        </td>
+                        <td>{vale.peluqueroNombre || vale.peluqueroEmail || '-'}</td>
+                        <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                        <td>
+                          {vale.observacion
+                            ? <span className="text-secondary">{vale.observacion}</span>
+                            : <span className="text-muted">-</span>
+                          }
+                        </td>
+                        <td>
+                          <Button
+                            size="sm"
+                            variant="success"
+                            className="me-2"
+                            style={{background: '#16a34a', borderColor: '#16a34a'}}
+                            onClick={() => handleAccionVale(vale, 'aprobar')}
+                          >
+                            <i className="bi bi-check-circle me-1"></i>
+                            Aprobar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            style={{background: '#ef4444', borderColor: '#ef4444'}}
+                            onClick={() => handleAccionVale(vale, 'rechazar')}
+                          >
+                            <i className="bi bi-x-circle me-1"></i>
+                            Rechazar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
             </Card.Body>
           </Card>
         </Col>

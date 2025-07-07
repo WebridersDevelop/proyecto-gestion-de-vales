@@ -5,7 +5,7 @@ body, #root {
   min-height: 100vh;
   background: #fafafa;
   color: #181818;
-  font-family: 'Segoe UI', 'Arial', sans-serif;
+  font-family: 'Inter', 'Roboto', Arial, sans-serif;
 }
 
 /* Contenedor principal */
@@ -75,9 +75,10 @@ body, #root {
 .navbar.fixed-bottom {
   background: #fff !important;
   border-top: 1.5px solid #e0e0e0 !important;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 -2px 12px #0001;
   padding-top: 0.3rem;
   padding-bottom: 0.3rem;
+  z-index: 100;
 }
 .navbar.fixed-bottom .nav-link {
   color: #181818 !important;
@@ -93,53 +94,68 @@ body, #root {
   background: #181818 !important;
   color: #fff !important;
 }
+.nav-link.active, .nav-link[aria-current="page"] {
+  color: #0d6efd !important;
+  font-weight: 600;
+}
 
 /* Login */
+/* Login background */
 .login-bg {
   min-height: 100vh;
-  min-width: 100vw;
+  background: linear-gradient(135deg, #f7fafc 0%, #e0e7ef 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
-  position: fixed;
-  top: 0; left: 0;
-  z-index: 1000;
 }
 
+/* Login container */
 .login-container {
   background: #fff;
-  padding: 2.5rem 2rem 2rem 2rem;
   border-radius: 18px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+  box-shadow: 0 4px 24px #0002;
+  padding: 36px 28px 28px 28px;
   width: 100%;
   max-width: 350px;
-  min-width: 260px;
-  text-align: center;
-  border: 1.5px solid #e0e0e0;
+  font-family: 'Inter', 'Roboto', Arial, sans-serif;
 }
 
-.login-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.login-container h2 {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: -1px;
 }
 
-.login-footer {
-  color: #888;
-}
-
-input.form-control, select.form-control {
+.login-container .form-control {
   border-radius: 8px;
-  border: 1.5px solid #bbb;
-  background: #fafafa;
-  color: #181818;
-  font-size: 1.05em;
-  transition: border-color 0.2s;
+  border: 1px solid #e5e7eb;
+  font-size: 15px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #222;
 }
-input.form-control:focus, select.form-control:focus {
-  border-color: #181818;
-  box-shadow: 0 0 0 2px #18181822;
+
+.login-container .form-control:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 2px #0d6efd22;
+}
+
+.login-container .btn-primary {
+  border-radius: 8px;
+  font-weight: 600;
+  background: #0d6efd;
+  border: none;
+  transition: background 0.2s;
+}
+
+.login-container .btn-primary:hover {
+  background: #2563eb;
+}
+
+.login-container .alert {
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
 }
 
 /* Alertas */
@@ -166,6 +182,40 @@ h2, h4 {
   color: #181818;
 }
 
+/* Tabla moderna y legible */
+.table {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px #0001;
+}
+.table thead th {
+  background: #f8f9fa;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 2px solid #dee2e6;
+}
+.table tbody td {
+  vertical-align: middle;
+  font-size: 13px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: #f6f8fa;
+}
+.table-hover tbody tr:hover {
+  background-color: #e9ecef;
+}
+.table .ingreso {
+  color: #198754;
+  font-weight: bold;
+}
+.table .egreso {
+  color: #dc3545;
+  font-weight: bold;
+}
+
 /* Responsive login */
 @media (max-width: 700px) {
   .login-bg {
@@ -181,4 +231,95 @@ h2, h4 {
     margin-top: 1.2rem;
     padding: 1rem 0.5rem;
   }
+}
+
+/* Mejoras para tablas en móvil */
+@media (max-width: 600px) {
+  .table th, .table td {
+    font-size: 12px;
+    padding: 4px 2px;
+    white-space: nowrap;
+  }
+  .table thead th {
+    font-size: 11px;
+  }
+  .table {
+    font-size: 12px;
+  }
+  .card-body {
+    padding: 8px;
+  }
+  .form-label, .form-select {
+    font-size: 13px;
+  }
+}
+
+/* Estilos generales para las tarjetas (aplican en desktop y móvil) */
+.vale-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0002;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  background: #fff;
+  font-size: 15px;
+  border-left: 4px solid #22c55e;
+  border: 1px solid #e3e3e3;
+  transition: box-shadow 0.2s;
+  min-width: 220px;
+  max-width: 340px;
+  margin-right: auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.vale-card.egreso {
+  border-left-color: #dc3545;
+}
+.vale-card .monto {
+  font-weight: bold;
+  font-size: 17px;
+}
+.vale-card .ingreso { color: #22c55e; }
+.vale-card .egreso { color: #dc3545; }
+.vale-card .badge {
+  font-size: 12px;
+  margin-left: 4px;
+}
+.vale-card:hover {
+  box-shadow: 0 4px 16px #0003;
+  border-color: #bdbdbd;
+}
+
+/* Solo ajustes de fuente/padding para móvil */
+@media (max-width: 600px) {
+  .vale-card {
+    font-size: 14px;
+    padding: 10px 12px;
+    max-width: 98vw;
+  }
+}
+.badge.bg-primary {
+  background: #2563eb !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.badge.bg-danger {
+  background: #ef4444 !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.badge.bg-success {
+  background: #16a34a !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+.badge.bg-warning.text-dark {
+  background: #facc15 !important;
+  color: #7c5700 !important;
+  font-weight: 600;
+}
+.table th, .table td {
+  font-size: 14px;
+  vertical-align: middle;
 }

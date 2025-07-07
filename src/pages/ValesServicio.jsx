@@ -12,6 +12,7 @@ function ValesServicio() {
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
   const [formaPago, setFormaPago] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchNombre = async () => {
@@ -47,11 +48,16 @@ function ValesServicio() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!servicio || !valor || !formaPago) {
+    setMensaje('');
+    if (!servicio.trim() || !valor || !formaPago) {
       setMensaje('Completa todos los campos');
       return;
     }
-
+    if (isNaN(valor) || Number(valor) <= 0) {
+      setMensaje('El valor debe ser un número positivo');
+      return;
+    }
+    setLoading(true);
     try {
       let nombre = nombreActual;
       if (!nombre) {
@@ -60,7 +66,7 @@ function ValesServicio() {
       }
 
       await addDoc(collection(db, 'vales_servicio'), {
-        servicio,
+        servicio: servicio.trim(),
         valor: Number(valor),
         peluqueroUid: user.uid,
         peluqueroEmail: user.email,
@@ -80,6 +86,7 @@ function ValesServicio() {
       setMensaje('Error al enviar el vale');
       setTimeout(() => setMensaje(''), 2000);
     }
+    setLoading(false);
   };
 
   return (
@@ -87,7 +94,7 @@ function ValesServicio() {
       <Col xs={12} md={10} lg={8} xl={7}>
         <Card className="shadow-sm">
           <Card.Body>
-            <Card.Title className="mb-4 text-center">Vales de Servicio</Card.Title>
+            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Vales de Servicio</Card.Title>
             {user && (
               <div style={{textAlign: 'center', marginBottom: 10}}>
                 <b>Usuario actual:</b> {nombreActual}
@@ -102,6 +109,7 @@ function ValesServicio() {
                     placeholder="Ej: Corte de cabello"
                     value={servicio}
                     onChange={e => setServicio(e.target.value)}
+                    autoFocus
                   />
                 </Form.Group>
                 <Form.Group className="mb-3" controlId="valor">
@@ -111,6 +119,7 @@ function ValesServicio() {
                     placeholder="Ej: 10000"
                     value={valor}
                     onChange={e => setValor(e.target.value)}
+                    min={1}
                   />
                 </Form.Group>
                 <Form.Group className="mb-3" controlId="formaPago">
@@ -123,11 +132,15 @@ function ValesServicio() {
                   </Form.Select>
                 </Form.Group>
                 <div className="d-grid">
-                  <Button variant="primary" type="submit">
-                    Enviar Vale
+                  <Button variant="primary" type="submit" disabled={loading}>
+                    {loading ? "Enviando..." : "Enviar Vale"}
                   </Button>
                 </div>
-                {mensaje && <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>{mensaje}</Alert>}
+                {mensaje && (
+                  <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>
+                    {mensaje}
+                  </Alert>
+                )}
               </Form>
             )}
             {user && (
@@ -135,7 +148,7 @@ function ValesServicio() {
                 <hr />
                 <h5 className="mb-3">Mis vales enviados</h5>
                 <div style={{overflowX: 'auto'}}>
-                  <Table striped bordered hover size="sm" responsive="sm">
+                  <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
                     <thead>
                       <tr>
                         <th>Fecha</th>
@@ -160,8 +173,36 @@ function ValesServicio() {
                             <td>{vale.servicio}</td>
                             <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
                             <td>${Number(vale.valor).toLocaleString()}</td>
-                            <td>{vale.estado || 'pendiente'}</td>
-                            <td>{vale.aprobadoPor || '-'}</td>
+                            <td>
+                              <span className={`badge ${
+                                vale.estado === 'aprobado'
+                                  ? 'bg-success'
+                                  : vale.estado === 'rechazado'
+                                  ? 'bg-danger'
+                                  : 'bg-warning text-dark'
+                              }`}>
+                                {vale.estado === 'aprobado'
+                                  ? 'Aprobado'
+                                  : vale.estado === 'rechazado'
+                                  ? 'Rechazado'
+                                  : 'Pendiente'}
+                              </span>
+                            </td>
+                            <td>
+                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : (
+                                <span className="text-secondary">-</span>
+                              )}
+                            </td>
                           </tr>
                         ))
                       )}

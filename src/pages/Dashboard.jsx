@@ -62,54 +62,66 @@ function Dashboard() {
   if (!rol) return <div>No tienes permisos asignados. Contacta al administrador.</div>;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
-  // Datos para el gráfico de barras
+  // Gráficos minimalistas
   const barData = {
     labels: ['Ingresos', 'Egresos', 'Saldo Neto'],
     datasets: [
       {
         label: 'Monto',
         data: [stats.ingresos, stats.egresos, stats.saldo],
-        backgroundColor: ['#198754', '#dc3545', stats.saldo >= 0 ? '#198754' : '#dc3545'],
+        backgroundColor: ['#6EE7B7', '#FCA5A5', stats.saldo >= 0 ? '#6EE7B7' : '#FCA5A5'],
+        borderRadius: 8,
+        barThickness: 36,
       },
     ],
   };
 
-  // Datos para el gráfico de torta
+  const barOptions = {
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 14 } } },
+      y: { grid: { color: '#f0f0f0' }, ticks: { font: { family: 'Inter', size: 13 } }, beginAtZero: true }
+    }
+  };
+
   const pieData = {
     labels: ['Aprobados', 'Pendientes', 'Rechazados'],
     datasets: [
       {
         data: [stats.valesAprobados, stats.valesPendientes, stats.valesRechazados],
-        backgroundColor: ['#198754', '#ffc107', '#dc3545'],
+        backgroundColor: ['#6EE7B7', '#FDE68A', '#FCA5A5'],
+        borderWidth: 1,
+        borderColor: '#fff'
       },
     ],
   };
 
+  const pieOptions = {
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 13 } } }
+    }
+  };
+
   return (
     <div>
-      <h3 className="mb-4">Dashboard</h3>
+      <h3 className="mb-4" style={{fontWeight: 600, letterSpacing: '-1px'}}>Dashboard</h3>
       <Row className="mb-4">
         <Col md={8} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Resumen Económico</Card.Title>
+              <Card.Title style={{fontWeight: 500, fontSize: 20}}>Resumen Económico</Card.Title>
               <div style={{maxWidth: 500, margin: '0 auto'}}>
-                <Bar data={barData} options={{
-                  plugins: { legend: { display: false } },
-                  scales: { y: { beginAtZero: true } }
-                }} />
+                <Bar data={barData} options={barOptions} />
               </div>
             </Card.Body>
           </Card>
         </Col>
         <Col md={4} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Estados de Vales</Card.Title>
+              <Card.Title style={{fontWeight: 500, fontSize: 20}}>Estados de Vales</Card.Title>
               <div style={{maxWidth: 250, margin: '0 auto'}}>
-                <Pie data={pieData} options={{
-                  plugins: { legend: { position: 'bottom' } }
-                }} />
+                <Pie data={pieData} options={pieOptions} />
               </div>
             </Card.Body>
           </Card>
@@ -117,34 +129,34 @@ function Dashboard() {
       </Row>
       <Row>
         <Col md={3} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Ingresos</Card.Title>
-              <Card.Text style={{fontSize: 20, color: 'green'}}>${stats.ingresos.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#6EE7B7'}}>Ingresos</Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#059669', fontWeight: 600}}>${stats.ingresos.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Egresos</Card.Title>
-              <Card.Text style={{fontSize: 20, color: 'red'}}>${stats.egresos.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#FCA5A5'}}>Egresos</Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#dc2626', fontWeight: 600}}>${stats.egresos.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Saldo Neto</Card.Title>
-              <Card.Text style={{fontSize: 20, color: stats.saldo >= 0 ? 'green' : 'red'}}>${stats.saldo.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 500, fontSize: 16, color: stats.saldo >= 0 ? '#6EE7B7' : '#FCA5A5'}}>Saldo Neto</Card.Title>
+              <Card.Text style={{fontSize: 22, color: stats.saldo >= 0 ? '#059669' : '#dc2626', fontWeight: 600}}>${stats.saldo.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
-          <Card className="text-center border-dark">
+          <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title>Total de Vales</Card.Title>
-              <Card.Text style={{fontSize: 20}}>{stats.totalVales}</Card.Text>
+              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#6366f1'}}>Total de Vales</Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#6366f1', fontWeight: 600}}>{stats.totalVales}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
