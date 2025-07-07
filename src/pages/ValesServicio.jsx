@@ -11,7 +11,6 @@ function ValesServicio() {
   const [mensaje, setMensaje] = useState('');
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
-  const [formaPago, setFormaPago] = useState('');
   const [loading, setLoading] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState(() => {
     const hoy = new Date();
@@ -53,7 +52,7 @@ function ValesServicio() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMensaje('');
-    if (!servicio.trim() || !valor || !formaPago) {
+    if (!servicio.trim() || !valor) {
       setMensaje('Completa todos los campos');
       return;
     }
@@ -75,7 +74,6 @@ function ValesServicio() {
         peluqueroUid: user.uid,
         peluqueroEmail: user.email,
         peluqueroNombre: nombre,
-        formaPago,
         estado: 'pendiente',
         aprobadoPor: '',
         fecha: Timestamp.now()
@@ -83,7 +81,6 @@ function ValesServicio() {
 
       setServicio('');
       setValor('');
-      setFormaPago('');
       setMensaje('¡Vale enviado correctamente!');
       setTimeout(() => setMensaje(''), 2000);
     } catch (error) {
@@ -135,15 +132,6 @@ function ValesServicio() {
                     min={1}
                   />
                 </Form.Group>
-                <Form.Group className="mb-3" controlId="formaPago">
-                  <Form.Label>Forma de Pago</Form.Label>
-                  <Form.Select value={formaPago} onChange={e => setFormaPago(e.target.value)} required>
-                    <option value="">Selecciona una opción</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="debito">Débito</option>
-                    <option value="transferencia">Transferencia</option>
-                  </Form.Select>
-                </Form.Group>
                 <div className="d-grid">
                   <Button variant="primary" type="submit" disabled={loading}>
                     {loading ? "Enviando..." : "Enviar Vale"}
@@ -194,7 +182,12 @@ function ValesServicio() {
                             <td>{vale.fecha.toLocaleDateString()}</td>
                             <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                             <td>{vale.servicio}</td>
-                            <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                            <td>
+                              {vale.formaPago
+                                ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)
+                                : <span className="text-secondary">Pendiente</span>
+                              }
+                            </td>
                             <td>${Number(vale.valor).toLocaleString()}</td>
                             <td>
                               <span className={`badge ${

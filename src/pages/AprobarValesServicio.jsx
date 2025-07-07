@@ -4,6 +4,7 @@ import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form } from 'react-bootstrap';
 import { useMediaQuery } from 'react-responsive';
+import React from 'react';
 
 function AprobarValesServicio() {
   const { user, rol } = useAuth();
@@ -11,10 +12,11 @@ function AprobarValesServicio() {
   const [loading, setLoading] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [accionVale, setAccionVale] = useState(null); // {vale, accion: 'aprobar'|'rechazar'}
+  const [valeActual, setValeActual] = useState(null);
+  const [accionModal, setAccionModal] = useState(''); // 'aprobar' o 'rechazar'
   const [observacion, setObservacion] = useState('');
+  const [formaPago, setFormaPago] = useState('');
 
-  // Detecta móvil (menos de 768px)
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
   useEffect(() => {
@@ -46,23 +48,28 @@ function AprobarValesServicio() {
     fetchVales();
   }, [mensaje]);
 
-  // Modal para aprobar/rechazar con observación
   const handleAccionVale = (vale, accion) => {
-    setAccionVale({ vale, accion });
+    setValeActual(vale);
+    setAccionModal(accion);
     setObservacion('');
+    setFormaPago('');
     setShowModal(true);
   };
 
   const handleConfirmarAccion = async () => {
-    if (!accionVale) return;
-    const { vale, accion } = accionVale;
+    if (!valeActual) return;
+    if (accionModal === 'aprobar' && !formaPago) {
+      setMensaje('Selecciona la forma de pago');
+      return;
+    }
     try {
-      await updateDoc(doc(db, vale.coleccion, vale.id), {
-        estado: accion === 'aprobar' ? 'aprobado' : 'rechazado',
+      await updateDoc(doc(db, valeActual.coleccion, valeActual.id), {
+        estado: accionModal === 'aprobar' ? 'aprobado' : 'rechazado',
         aprobadoPor: user.email,
-        observacion: observacion || ''
+        observacion: observacion || '',
+        ...(accionModal === 'aprobar' ? { formaPago } : {})
       });
-      setMensaje(accion === 'aprobar' ? 'Vale aprobado' : 'Vale rechazado');
+      setMensaje(accionModal === 'aprobar' ? 'Vale aprobado' : 'Vale rechazado');
       setShowModal(false);
       setTimeout(() => setMensaje(''), 1500);
     } catch {
@@ -79,14 +86,29 @@ function AprobarValesServicio() {
 
   return (
     <>
-      {/* Modal para observación */}
+      {/* Modal para observación y forma de pago */}
       <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>
-            {accionVale?.accion === 'aprobar' ? 'Aprobar Vale' : 'Rechazar Vale'}
+            {accionModal === 'aprobar' ? 'Aprobar Vale' : 'Rechazar Vale'}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {accionModal === 'aprobar' && (
+            <Form.Group className="mb-3">
+              <Form.Label>Forma de Pago <span style={{color:'red'}}>*</span></Form.Label>
+              <Form.Select
+                value={formaPago}
+                onChange={e => setFormaPago(e.target.value)}
+                required
+              >
+                <option value="">Selecciona una opción</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="debito">Débito</option>
+                <option value="transferencia">Transferencia</option>
+              </Form.Select>
+            </Form.Group>
+          )}
           <Form.Group>
             <Form.Label>Observación (opcional)</Form.Label>
             <Form.Control
@@ -103,10 +125,10 @@ function AprobarValesServicio() {
             Cancelar
           </Button>
           <Button
-            variant={accionVale?.accion === 'aprobar' ? 'success' : 'danger'}
+            variant={accionModal === 'aprobar' ? 'success' : 'danger'}
             onClick={handleConfirmarAccion}
           >
-            {accionVale?.accion === 'aprobar' ? <><i className="bi bi-check-circle me-1"></i>Aprobar</> : <><i className="bi bi-x-circle me-1"></i>Rechazar</>}
+            {accionModal === 'aprobar' ? <><i className="bi bi-check-circle me-1"></i>Aprobar</> : <><i className="bi bi-x-circle me-1"></i>Rechazar</>}
           </Button>
         </Modal.Footer>
       </Modal>

@@ -28,7 +28,7 @@ body {
 
 /* Asegura que el contenido principal no quede tapado por el menú inferior */
 .container, .main-content, .page-content {
-  padding-bottom: env(safe-area-inset-bottom, 0) !important;
+  padding-bottom: 120px !important; /* Aumenta el valor según la altura de tu barra */
 }
 
 /* Botones */

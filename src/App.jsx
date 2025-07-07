@@ -56,9 +56,9 @@ function AppContent() {
               <Route path="/vales-servicio" element={<ValesServicio />} />
               <Route path="/vales-gasto" element={<ValesGasto />} />
               <Route path="/cuadre-diario" element={
-                <AdminOnly>
-                  <CuadreDiario />
-                </AdminOnly>
+                (rol === 'admin' || rol === 'anfitrion')
+                  ? <CuadreDiario />
+                  : <Login />
               } />
               <Route path="/crear-usuario" element={<CrearUsuario />} />
               {(rol === 'admin' || rol === 'anfitrion') && (
