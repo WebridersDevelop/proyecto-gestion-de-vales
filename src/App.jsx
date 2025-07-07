@@ -70,12 +70,12 @@ function AppContent() {
       {/* Menú inferior tipo app móvil, blanco y negro */}
       {showBottomMenu && (
         <nav className="navbar bg-white border-top fixed-bottom">
-          <div className="container-fluid d-flex justify-content-around">
+          <div className="container-fluid d-flex justify-content-around flex-nowrap overflow-auto" style={{maxWidth: '100vw'}}>
             {/* Dashboard: solo admin */}
             {rol === 'admin' && (
               <Link className="nav-link text-center text-dark" to="/dashboard">
-                <i className="bi bi-speedometer2" style={{fontSize: 22}}></i><br />
-                <small>Dashboard</small>
+                <i className="bi bi-speedometer2" style={{fontSize: 18}}></i><br />
+                <small style={{fontSize: 10}}>Dashboard</small>
               </Link>
             )}
             {/* Vales Servicio: admin, anfitrion, peluquero */}
