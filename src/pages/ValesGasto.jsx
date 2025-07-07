@@ -101,152 +101,147 @@ function ValesGasto() {
   }
 
   return (
-    <Row className="justify-content-center mt-4">
-      <Col xs={12} md={10} lg={8} xl={7}>
-        <Card className="shadow-sm">
-          <Card.Body>
-            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Vales de Gasto</Card.Title>
-            {user && (
-              <div style={{textAlign: 'center', marginBottom: 10}}>
-                <b>Usuario actual:</b> {nombreActual}
-              </div>
-            )}
-            {(rol === 'peluquero' || rol === 'admin' || rol === 'anfitrion') && (
-              <Form onSubmit={handleSubmit} className="mb-4">
-                <Form.Group className="mb-3" controlId="concepto">
-                  <Form.Label>Concepto</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Ej: Compra de insumos"
-                    value={concepto}
-                    onChange={e => setConcepto(e.target.value)}
-                    autoFocus
-                  />
-                </Form.Group>
-                <Form.Group className="mb-3" controlId="valor">
-                  <Form.Label>Valor</Form.Label>
-                  <Form.Control
-                    type="number"
-                    placeholder="Ej: 5000"
-                    value={valor}
-                    onChange={e => setValor(e.target.value)}
-                    min={1}
-                  />
-                </Form.Group>
-                <div className="d-grid">
-                  <Button variant="danger" type="submit" disabled={loading}>
-                    {loading ? "Enviando..." : "Enviar Vale de Gasto"}
-                  </Button>
+    <div className="container">
+      <Row className="justify-content-center mt-4">
+        <Col xs={12} md={12} lg={11} xl={10}>
+          <Card className="shadow-sm">
+            <Card.Body>
+              <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Vales de Gasto</Card.Title>
+              {user && (
+                <div style={{textAlign: 'center', marginBottom: 10}}>
+                  <b>Usuario actual:</b> {nombreActual}
                 </div>
-                {mensaje && (
-                  <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>
-                    {mensaje}
-                  </Alert>
-                )}
-              </Form>
-            )}
-            {user && (
-              <>
-                <hr />
-                <h5 className="mb-3">Mis vales de gasto enviados</h5>
-                {/* Selector de fecha */}
-                <Form.Group className="mb-3" controlId="fechaFiltro">
-                  <Form.Label>Filtrar por fecha</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={fechaFiltro}
-                    max={new Date().toISOString().slice(0, 10)}
-                    onChange={e => setFechaFiltro(e.target.value)}
-                    style={{maxWidth: 200}}
-                  />
-                </Form.Group>
-                {/* Acumulado del día */}
-                {valesFiltrados.length > 0 && (
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 17,
-                      color: "#ef4444",
-                      marginBottom: 10,
-                      textAlign: "right"
-                    }}
-                  >
-                    Acumulado del día: ${valesFiltrados.reduce((acc, v) => acc + Number(v.valor), 0).toLocaleString()}
+              )}
+              {(rol === 'peluquero' || rol === 'admin' || rol === 'anfitrion') && (
+                <Form onSubmit={handleSubmit} className="mb-4">
+                  <Form.Group className="mb-3" controlId="concepto">
+                    <Form.Label>Concepto</Form.Label>
+                    <Form.Control
+                      type="text"
+                      placeholder="Ej: Compra de insumos"
+                      value={concepto}
+                      onChange={e => setConcepto(e.target.value)}
+                      autoFocus
+                    />
+                  </Form.Group>
+                  <Form.Group className="mb-3" controlId="valor">
+                    <Form.Label>Valor</Form.Label>
+                    <Form.Control
+                      type="number"
+                      placeholder="Ej: 5000"
+                      value={valor}
+                      onChange={e => setValor(e.target.value)}
+                      min={1}
+                    />
+                  </Form.Group>
+                  <div className="d-grid">
+                    <Button variant="danger" type="submit" disabled={loading}>
+                      {loading ? "Enviando..." : "Enviar Vale de Gasto"}
+                    </Button>
                   </div>
-                )}
-                <div style={{overflowX: 'auto'}}>
-                  <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Hora</th>
-                        <th>Concepto</th>
-                        <th>Forma de Pago</th>
-                        <th>Valor</th>
-                        <th>Estado</th>
-                        <th>Aprobado por</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {valesFiltrados.length === 0 ? (
+                  {mensaje && (
+                    <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>
+                      {mensaje}
+                    </Alert>
+                  )}
+                </Form>
+              )}
+              {user && (
+                <>
+                  <hr />
+                  <h5 className="mb-3">Mis vales de gasto enviados</h5>
+                  {/* Selector de fecha */}
+                  <Form.Group className="mb-3" controlId="fechaFiltro">
+                    <Form.Label>Filtrar por fecha</Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={fechaFiltro}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={e => setFechaFiltro(e.target.value)}
+                      style={{maxWidth: 200}}
+                    />
+                  </Form.Group>
+                  {/* Acumulado del día */}
+                  {valesFiltrados.length > 0 && (
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 17,
+                        color: "#ef4444",
+                        marginBottom: 10,
+                        textAlign: "right"
+                      }}
+                    >
+                      Acumulado del día: ${valesFiltrados.reduce((acc, v) => acc + Number(v.valor), 0).toLocaleString()}
+                    </div>
+                  )}
+                  <div style={{overflowX: 'auto'}}>
+                    <Table striped bordered hover size="sm" responsive="md" className="mb-0">
+                      <thead>
                         <tr>
-                          <td colSpan={7} className="text-center">No tienes vales de gasto enviados para esta fecha.</td>
+                          <th>Fecha</th>
+                          <th>Hora</th>
+                          <th>Concepto</th>
+                          <th>Valor</th>
+                          <th>Estado</th>
+                          <th>Aprobado por</th>
                         </tr>
-                      ) : (
-                        valesFiltrados.map(vale => (
-                          <tr key={vale.id}>
-                            <td>{vale.fecha.toLocaleDateString()}</td>
-                            <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                            <td>{vale.concepto}</td>
-                            <td>
-                              {vale.formaPago
-                                ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)
-                                : <span className="text-secondary">Pendiente</span>
-                              }
-                            </td>
-                            <td>${Number(vale.valor).toLocaleString()}</td>
-                            <td>
-                              <span className={`badge ${
-                                vale.estado === 'aprobado'
-                                  ? 'bg-success'
-                                  : vale.estado === 'rechazado'
-                                  ? 'bg-danger'
-                                  : 'bg-warning text-dark'
-                              }`}>
-                                {vale.estado === 'aprobado'
-                                  ? 'Aprobado'
-                                  : vale.estado === 'rechazado'
-                                  ? 'Rechazado'
-                                  : 'Pendiente'}
-                              </span>
-                            </td>
-                            <td>
-                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#ef4444', fontWeight: 600 }}>
-                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : (
-                                <span className="text-secondary">-</span>
-                              )}
-                            </td>
+                      </thead>
+                      <tbody>
+                        {valesFiltrados.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center">No tienes vales de gasto enviados para esta fecha.</td>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </Table>
-                </div>
-              </>
-            )}
-          </Card.Body>
-        </Card>
-      </Col>
-    </Row>
+                        ) : (
+                          valesFiltrados.map(vale => (
+                            <tr key={vale.id}>
+                              <td>{vale.fecha.toLocaleDateString()}</td>
+                              <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td>{vale.concepto}</td>
+                              <td>${Number(vale.valor).toLocaleString()}</td>
+                              <td>
+                                <span className={`badge ${
+                                  vale.estado === 'aprobado'
+                                    ? 'bg-success'
+                                    : vale.estado === 'rechazado'
+                                    ? 'bg-danger'
+                                    : 'bg-warning text-dark'
+                                }`}>
+                                  {vale.estado === 'aprobado'
+                                    ? 'Aprobado'
+                                    : vale.estado === 'rechazado'
+                                    ? 'Rechazado'
+                                    : 'Pendiente'}
+                                </span>
+                              </td>
+                              <td>
+                                {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : (
+                                  <span className="text-secondary">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </div>
   );
 }
 

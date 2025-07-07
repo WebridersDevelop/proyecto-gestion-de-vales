@@ -11,6 +11,7 @@ import AprobarValesServicio from './pages/AprobarValesServicio';
 import './App.css';
 import React from 'react';
 import InstallPWAButton from './InstallPWAButton';
+import HomeObento from './pages/HomeObento';
 
 function AppContent() {
   const location = useLocation();
@@ -40,96 +41,88 @@ function AppContent() {
       <p style={{color: 'black', textAlign: 'center'}}>Rol actual: {rol ? rol : 'No definido'}</p>
 
       <main>
-        {isLogin ? (
-          <Routes>
-            <Route path="/" element={<Login />} />
-          </Routes>
-        ) : (
-          <div className="container" style={{ paddingBottom: 70 }}>
-            <Routes>
-              <Route path="/" element={<Login />} />
-              <Route path="/dashboard" element={
-                <AdminOnly>
-                  <Dashboard />
-                </AdminOnly>
-              } />
-              <Route path="/vales-servicio" element={<ValesServicio />} />
-              <Route path="/vales-gasto" element={<ValesGasto />} />
-              <Route path="/cuadre-diario" element={
-                (rol === 'admin' || rol === 'anfitrion')
-                  ? <CuadreDiario />
-                  : <Login />
-              } />
-              <Route path="/crear-usuario" element={<CrearUsuario />} />
-              {(rol === 'admin' || rol === 'anfitrion') && (
-                <Route path="/aprobar-vales-servicio" element={<AprobarValesServicio />} />
-              )}
-            </Routes>
-          </div>
-        )}
-
-        {/* Menú inferior tipo app móvil */}
-        {showBottomMenu && (
-          <nav className="bottom-nav" aria-label="Menú principal">
-            <div className="bottom-nav-inner">
-              <NavLink className="bottom-nav-link" to="/" end>
-                <i className="bi bi-house" aria-hidden="true"></i>
-                <span>Inicio</span>
-              </NavLink>
-              {rol === 'admin' && (
-                <NavLink className="bottom-nav-link" to="/dashboard">
-                  <i className="bi bi-speedometer2" aria-hidden="true"></i>
-                  <span>Dashboard</span>
-                </NavLink>
-              )}
-              {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
-                <NavLink className="bottom-nav-link" to="/vales-servicio">
-                  <i className="bi bi-receipt" aria-hidden="true"></i>
-                  <span>Vales</span>
-                </NavLink>
-              )}
-              {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
-                <NavLink className="bottom-nav-link" to="/vales-gasto">
-                  <i className="bi bi-cash-stack" aria-hidden="true"></i>
-                  <span>Gastos</span>
-                </NavLink>
-              )}
-              {rol === 'admin' && (
-                <NavLink className="bottom-nav-link" to="/crear-usuario">
-                  <i className="bi bi-person-plus" aria-hidden="true"></i>
-                  <span>Crear</span>
-                </NavLink>
-              )}
-              {(rol === 'admin' || rol === 'anfitrion') && (
-                <NavLink className="bottom-nav-link" to="/aprobar-vales-servicio">
-                  <i className="bi bi-check2-square" aria-hidden="true"></i>
-                  <span>Aprobar</span>
-                </NavLink>
-              )}
-              {(rol === 'admin' || rol === 'anfitrion') && (
-                <NavLink className="bottom-nav-link" to="/cuadre-diario">
-                  <i className="bi bi-table" aria-hidden="true"></i>
-                  <span>Cuadre</span>
-                </NavLink>
-              )}
-              {rol && (
-                <button
-                  className="bottom-nav-link border-0 bg-transparent"
-                  style={{outline: 'none'}}
-                  onClick={logout}
-                  title="Cerrar sesión"
-                  aria-label="Cerrar sesión"
-                  type="button"
-                >
-                  <i className="bi bi-box-arrow-right" aria-hidden="true"></i>
-                  <span>Salir</span>
-                </button>
-              )}
-            </div>
-          </nav>
-        )}
-        <div className="bottom-spacer"></div>
+        <Routes>
+          <Route path="/" element={rol ? <HomeObento /> : <Login />} />
+          <Route path="/dashboard" element={
+            <AdminOnly>
+              <Dashboard />
+            </AdminOnly>
+          } />
+          <Route path="/vales-servicio" element={<ValesServicio />} />
+          <Route path="/vales-gasto" element={<ValesGasto />} />
+          <Route path="/cuadre-diario" element={
+            (rol === 'admin' || rol === 'anfitrion')
+              ? <CuadreDiario />
+              : <Login />
+          } />
+          <Route path="/crear-usuario" element={<CrearUsuario />} />
+          {(rol === 'admin' || rol === 'anfitrion') && (
+            <Route path="/aprobar-vales-servicio" element={<AprobarValesServicio />} />
+          )}
+        </Routes>
       </main>
+
+      {/* Menú inferior tipo app móvil */}
+      {showBottomMenu && (
+        <nav className="bottom-nav" aria-label="Menú principal">
+          <div className="bottom-nav-inner">
+            <NavLink className="bottom-nav-link" to="/" end>
+              <i className="bi bi-house" aria-hidden="true"></i>
+              <span>Inicio</span>
+            </NavLink>
+            {rol === 'admin' && (
+              <NavLink className="bottom-nav-link" to="/dashboard">
+                <i className="bi bi-speedometer2" aria-hidden="true"></i>
+                <span>Dashboard</span>
+              </NavLink>
+            )}
+            {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+              <NavLink className="bottom-nav-link" to="/vales-servicio">
+                <i className="bi bi-receipt" aria-hidden="true"></i>
+                <span>Vales</span>
+              </NavLink>
+            )}
+            {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+              <NavLink className="bottom-nav-link" to="/vales-gasto">
+                <i className="bi bi-cash-stack" aria-hidden="true"></i>
+                <span>Gastos</span>
+              </NavLink>
+            )}
+            {rol === 'admin' && (
+              <NavLink className="bottom-nav-link" to="/crear-usuario">
+                <i className="bi bi-person-plus" aria-hidden="true"></i>
+                <span>Crear</span>
+              </NavLink>
+            )}
+            {(rol === 'admin' || rol === 'anfitrion') && (
+              <NavLink className="bottom-nav-link" to="/aprobar-vales-servicio">
+                <i className="bi bi-check2-square" aria-hidden="true"></i>
+                <span>Aprobar</span>
+              </NavLink>
+            )}
+            {(rol === 'admin' || rol === 'anfitrion') && (
+              <NavLink className="bottom-nav-link" to="/cuadre-diario">
+                <i className="bi bi-table" aria-hidden="true"></i>
+                <span>Cuadre</span>
+              </NavLink>
+            )}
+            {rol && (
+              <button
+                className="bottom-nav-link border-0 bg-transparent"
+                style={{outline: 'none'}}
+                onClick={logout}
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+                type="button"
+              >
+                <i className="bi bi-box-arrow-right" aria-hidden="true"></i>
+                <span>Salir</span>
+              </button>
+            )}
+          </div>
+        </nav>
+      )}
+      <div className="bottom-spacer"></div>
       <InstallPWAButton />
     </>
   );
