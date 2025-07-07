@@ -148,7 +148,7 @@ h2, h4 {
   color: #181818;
 }
 
-/* Menú inferior compacto */
+/* Menú inferior ultra compacto */
 .bottom-nav {
   position: fixed;
   left: 0;
@@ -157,12 +157,12 @@ h2, h4 {
   background: #fff;
   border-top: 1px solid #e0e0e0;
   z-index: 1000;
-  height: 48px;
-  min-height: 48px;
+  height: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 -1px 4px rgba(0,0,0,0.03);
+  box-shadow: 0 -1px 2px rgba(0,0,0,0.02);
   padding-bottom: 0;
 }
 
@@ -174,7 +174,7 @@ h2, h4 {
   height: 100%;
   max-width: 600px;
   margin: 0 auto;
-  gap: 18px;
+  gap: 10px;
 }
 
 .bottom-nav-link {
@@ -182,13 +182,13 @@ h2, h4 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   color: #222;
   text-decoration: none;
   padding: 0 2px;
-  min-width: 36px;
-  min-height: 36px;
-  max-width: 48px;
+  min-width: 28px;
+  min-height: 28px;
+  max-width: 38px;
   border: none;
   background: none;
   transition: color 0.2s;
@@ -204,18 +204,18 @@ h2, h4 {
 }
 
 .bottom-nav-link i {
-  font-size: 1rem;
+  font-size: 0.85rem;
   margin-bottom: 0;
 }
 
 .bottom-nav-link span {
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 500;
   margin-top: 0;
   line-height: 1.1;
   text-align: center;
   white-space: nowrap;
-  max-width: 48px;
+  max-width: 38px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -223,23 +223,23 @@ h2, h4 {
 /* Responsive: más grande y cómodo en móvil */
 @media (max-width: 600px) {
   .bottom-nav {
-    height: 70px;
-    min-height: 70px;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0) + 12px);
+    height: 60px;
+    min-height: 60px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
   }
   .bottom-nav-inner {
     gap: 6px;
   }
   .bottom-nav-link {
-    font-size: 1rem;
-    max-width: 70px;
+    font-size: 0.95rem;
+    max-width: 60px;
   }
   .bottom-nav-link i {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
   }
   .bottom-nav-link span {
-    font-size: 1rem;
-    max-width: 70px;
+    font-size: 0.95rem;
+    max-width: 60px;
   }
 }
 
