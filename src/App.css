@@ -76,64 +76,6 @@ body, #root {
   border-color: #ffc107;
 }
 
-/* Menú inferior */
-.navbar.fixed-bottom {
-  background: #fff !important;
-  border-top: 1.5px solid #e0e0e0 !important;
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
-  border-radius: 18px 18px 0 0;
-  padding-top: 0.3rem;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
-  z-index: 1000;
-  height: 74px;
-  min-height: 74px;
-  display: flex;
-  align-items: center;
-}
-
-.navbar.fixed-bottom .nav-link {
-  color: #181818 !important;
-  font-weight: 600;
-  font-size: 1.08em;
-  padding: 0.3rem 0.5rem 0 0.5rem;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 60px;
-  min-height: 54px;
-  justify-content: center;
-}
-
-.navbar.fixed-bottom .nav-link.active,
-.navbar.fixed-bottom .nav-link:focus,
-.navbar.fixed-bottom .nav-link:hover {
-  background: #181818 !important;
-  color: #fff !important;
-}
-
-.nav-link {
-  font-weight: 600;
-  font-size: 13px;
-  padding: 6px 0 0 0;
-  border-radius: 10px;
-  transition: background 0.15s;
-}
-.nav-link.active, .nav-link:focus {
-  background: #f3f4f6;
-}
-.nav-link i {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 1.7rem;
-}
-.nav-link span {
-  font-size: 1.05rem;
-  font-weight: 500;
-  margin-top: 1px;
-}
-
 /* Login */
 .login-bg {
   min-height: 100vh;
@@ -206,7 +148,7 @@ h2, h4 {
   color: #181818;
 }
 
-/* Menú inferior moderno y compacto */
+/* Menú inferior moderno y cómodo */
 .bottom-nav {
   position: fixed;
   left: 0;
@@ -219,7 +161,7 @@ h2, h4 {
   min-height: 80px;
   display: flex;
   align-items: center;
-  /* Safe area para iOS, ¡ahora más grande! */
+  justify-content: center;
   padding-bottom: calc(env(safe-area-inset-bottom, 0) + 18px);
   box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
 }
@@ -227,20 +169,23 @@ h2, h4 {
 .bottom-nav-inner {
   width: 100%;
   display: flex;
-  justify-content: space-around;
+  justify-content: space-evenly;
   align-items: center;
   height: 100%;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .bottom-nav-link {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   font-size: 1.1rem;
   color: #222;
   text-decoration: none;
-  padding: 10px 0 0 0;
-  min-width: 56px;
+  padding: 0 14px;
+  min-width: 60px;
   min-height: 54px;
   border: none;
   background: none;
@@ -254,16 +199,17 @@ h2, h4 {
 }
 
 .bottom-nav-link i {
-  font-size: 1.7rem;
-  margin-bottom: 2px;
+  font-size: 1.8rem;
+  margin-bottom: 3px;
 }
 
 .bottom-nav-link span {
-  font-size: 1.05rem;
+  font-size: 1.13rem;
   font-weight: 500;
-  margin-top: 2px;
+  margin-top: 6px;
 }
 
+/* Responsive: aún más grande en pantallas pequeñas */
 @media (max-width: 600px) {
   .bottom-nav {
     height: 90px;
@@ -271,14 +217,30 @@ h2, h4 {
     padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
   }
   .bottom-nav-link i {
-    font-size: 2rem;
+    font-size: 2.1rem;
   }
   .bottom-nav-link span {
-    font-size: 1.13rem;
+    font-size: 1.18rem;
   }
 }
 
-/* Responsive login */
+/* Espaciador para que el contenido no quede tapado */
+.bottom-spacer {
+  height: calc(env(safe-area-inset-bottom, 0) + 90px);
+}
+
+/* Mejoras para tablas en móvil */
+@media (max-width: 600px) {
+  .table th, .table td {
+    font-size: 13px !important;
+    padding: 7px 6px !important;
+    white-space: nowrap;
+  }
+  .login-container, .card {
+    padding: 16px 4px !important;
+  }
+}
+
 @media (max-width: 700px) {
   .login-bg {
     justify-content: center;
@@ -292,18 +254,6 @@ h2, h4 {
   .container {
     margin-top: 1.2rem;
     padding: 1rem 0.5rem;
-  }
-}
-
-/* Mejoras para tablas en móvil */
-@media (max-width: 600px) {
-  .table th, .table td {
-    font-size: 13px !important;
-    padding: 7px 6px !important;
-    white-space: nowrap;
-  }
-  .login-container, .card {
-    padding: 16px 4px !important;
   }
 }
 
@@ -367,75 +317,4 @@ h2, h4 {
   color: #ef4444;
   font-weight: 700;
   font-size: 18px;
-}
-
-/* Menú inferior mejorado para móvil */
-.navbar.fixed-bottom {
-  background: #fff !important;
-  border-top: 1.5px solid #e0e0e0 !important;
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
-  border-radius: 18px 18px 0 0;
-  padding-top: 0.3rem;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
-  z-index: 1000;
-  height: 74px;
-  min-height: 74px;
-  display: flex;
-  align-items: center;
-}
-
-.navbar.fixed-bottom .nav-link {
-  color: #181818 !important;
-  font-weight: 600;
-  font-size: 1.08em;
-  padding: 0.3rem 0.5rem 0 0.5rem;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 60px;
-  min-height: 54px;
-  justify-content: center;
-}
-
-.navbar.fixed-bottom .nav-link.active,
-.navbar.fixed-bottom .nav-link:focus,
-.navbar.fixed-bottom .nav-link:hover {
-  background: #181818 !important;
-  color: #fff !important;
-}
-
-.nav-link i {
-  font-size: 1.7rem;
-  margin-bottom: 1px;
-}
-
-.nav-link span {
-  font-size: 1.05rem;
-  font-weight: 500;
-  margin-top: 1px;
-}
-
-/* Responsive: aún más grande en pantallas pequeñas */
-@media (max-width: 600px) {
-  .navbar.fixed-bottom {
-    height: 84px;
-    min-height: 84px;
-  }
-  .navbar.fixed-bottom .nav-link {
-    font-size: 1.18em;
-    min-width: 64px;
-    min-height: 60px;
-  }
-  .nav-link i {
-    font-size: 2rem;
-  }
-  .nav-link span {
-    font-size: 1.13rem;
-  }
-}
-
-.bottom-spacer {
-  height: calc(env(safe-area-inset-bottom, 0) + 90px);
 }

@@ -70,8 +70,13 @@ function AppContent() {
 
       {/* Menú inferior tipo app móvil, blanco y negro */}
       {showBottomMenu && (
-        <nav className="bottom-nav shadow-sm">
+        <div className="bottom-nav">
           <div className="bottom-nav-inner">
+            {/* Inicio: todos los roles */}
+            <NavLink className="bottom-nav-link" to="/">
+              <i className="bi bi-house"></i>
+              <span>Inicio</span>
+            </NavLink>
             {/* Dashboard: solo admin */}
             {rol === 'admin' && (
               <NavLink
@@ -130,7 +135,7 @@ function AppContent() {
               </button>
             )}
           </div>
-        </nav>
+        </div>
       )}
       <div className="bottom-spacer"></div>
       <InstallPWAButton />
