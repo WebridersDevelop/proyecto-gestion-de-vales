@@ -16,7 +16,12 @@ function CuadreDiario() {
   const { rol } = useAuth ? useAuth() : { rol: null };
   const [vista, setVista] = useState('tabla'); // 'tabla' o 'cards'
   // Ambos selectores de fecha, ambos por defecto el día actual
-  const hoy = new Date().toISOString().slice(0, 10);
+  function getHoyLocal() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+  const hoy = getHoyLocal();
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
 

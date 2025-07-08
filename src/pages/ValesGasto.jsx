@@ -12,10 +12,7 @@ function ValesGasto() {
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [fechaFiltro, setFechaFiltro] = useState(() => {
-    const hoy = new Date();
-    return hoy.toISOString().slice(0, 10); // formato YYYY-MM-DD
-  });
+  const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
 
   useEffect(() => {
     const fetchNombre = async () => {
@@ -156,7 +153,7 @@ function ValesGasto() {
                     <Form.Control
                       type="date"
                       value={fechaFiltro}
-                      max={new Date().toISOString().slice(0, 10)}
+                      max={getHoyLocal()}
                       onChange={e => setFechaFiltro(e.target.value)}
                       style={{maxWidth: 200}}
                     />
@@ -246,6 +243,12 @@ function ValesGasto() {
       </Row>
     </div>
   );
+}
+
+function getHoyLocal() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
 }
 
 export default ValesGasto;
