@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,8 @@ function ValesGasto() {
   const [valesUsuario, setValesUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
+  const conceptoRef = useRef(null);
+  const valorRef = useRef(null);
 
   useEffect(() => {
     const fetchNombre = async () => {
@@ -78,6 +80,10 @@ function ValesGasto() {
 
       setConcepto('');
       setValor('');
+      // Quita el foco de los campos para ocultar el teclado
+      if (conceptoRef.current) conceptoRef.current.blur();
+      if (valorRef.current) valorRef.current.blur();
+
       setMensaje('¡Vale de gasto enviado correctamente!');
       setTimeout(() => setMensaje(''), 2000);
     } catch (error) {
@@ -126,6 +132,7 @@ function ValesGasto() {
                           value={concepto}
                           onChange={e => setConcepto(e.target.value)}
                           autoFocus
+                          ref={conceptoRef}
                         />
                       </Form.Group>
                     </Col>
@@ -138,6 +145,7 @@ function ValesGasto() {
                           value={valor}
                           onChange={e => setValor(e.target.value)}
                           min={1}
+                          ref={valorRef}
                         />
                       </Form.Group>
                     </Col>
