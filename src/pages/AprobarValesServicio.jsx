@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form } from 'react-bootstrap';
 import { useMediaQuery } from 'react-responsive';
@@ -8,6 +8,8 @@ import React from 'react';
 
 function AprobarValesServicio() {
   const { user, rol } = useAuth();
+  const [valesServicio, setValesServicio] = useState([]);
+  const [valesGasto, setValesGasto] = useState([]);
   const [valesPendientes, setValesPendientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mensaje, setMensaje] = useState('');
@@ -20,34 +22,53 @@ function AprobarValesServicio() {
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
+  // Listener para vales de servicio
   useEffect(() => {
-    const fetchVales = async () => {
-      setLoading(true);
-      const snaps = await Promise.all([
-        getDocs(collection(db, 'vales_servicio')),
-        getDocs(collection(db, 'vales_gasto'))
-      ]);
-      const vales = [];
-      snaps.forEach((snap, idx) => {
-        const tipo = idx === 0 ? 'servicio' : 'gasto';
-        snap.forEach(docu => {
-          const data = docu.data();
-          if (data.estado === 'pendiente') {
-            vales.push({
-              ...data,
-              id: docu.id,
-              fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
-              coleccion: idx === 0 ? 'vales_servicio' : 'vales_gasto',
-              tipo
-            });
-          }
-        });
+    const unsub = onSnapshot(collection(db, 'vales_servicio'), snap => {
+      const arr = [];
+      snap.forEach(docu => {
+        const data = docu.data();
+        if (data.estado === 'pendiente') {
+          arr.push({
+            ...data,
+            id: docu.id,
+            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
+            coleccion: 'vales_servicio',
+            tipo: 'servicio'
+          });
+        }
       });
-      setValesPendientes(vales);
-      setLoading(false);
-    };
-    fetchVales();
+      setValesServicio(arr);
+    });
+    return () => unsub();
   }, [mensaje]);
+
+  // Listener para vales de gasto
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
+      const arr = [];
+      snap.forEach(docu => {
+        const data = docu.data();
+        if (data.estado === 'pendiente') {
+          arr.push({
+            ...data,
+            id: docu.id,
+            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
+            coleccion: 'vales_gasto',
+            tipo: 'gasto'
+          });
+        }
+      });
+      setValesGasto(arr);
+    });
+    return () => unsub();
+  }, [mensaje]);
+
+  // Combina ambos arrays solo cuando cambian
+  useEffect(() => {
+    setValesPendientes([...valesServicio, ...valesGasto].sort((a, b) => b.fecha - a.fecha));
+    setLoading(false);
+  }, [valesServicio, valesGasto]);
 
   const handleAccionVale = (vale, accion) => {
     setValeActual(vale);
@@ -73,7 +94,8 @@ function AprobarValesServicio() {
         estado: accionModal === 'aprobar' ? 'aprobado' : 'rechazado',
         aprobadoPor: user.email,
         observacion: observacion || '',
-        ...(accionModal === 'aprobar' ? { formaPago, local } : {})
+        local,
+        ...(accionModal === 'aprobar' ? { formaPago } : {})
       });
       setMensaje(accionModal === 'aprobar' ? 'Vale aprobado' : 'Vale rechazado');
       setShowModal(false);
@@ -155,9 +177,11 @@ function AprobarValesServicio() {
 
       <Row className="justify-content-center mt-4">
         <Col xs={12} md={11} lg={10}>
-          <Card className="shadow-sm">
+          <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Aprobar Vales de Servicio y Gasto</Card.Title>
+              <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 24}}>
+                <i className="bi bi-shield-check me-2"></i>Aprobar Vales de Servicio y Gasto
+              </Card.Title>
               {mensaje && <Alert variant="info">{mensaje}</Alert>}
               {isMobile ? (
                 <div>
@@ -165,7 +189,7 @@ function AprobarValesServicio() {
                     <Alert variant="info" className="text-center">No hay vales pendientes.</Alert>
                   ) : (
                     valesPendientes.map(vale => (
-                      <div className={`vale-card ${vale.tipo === 'gasto' ? 'egreso' : ''}`} key={vale.id} style={{marginBottom: 16}}>
+                      <div className={`vale-card ${vale.tipo === 'gasto' ? 'egreso' : ''} shadow-sm p-3 mb-2 bg-white rounded`} key={vale.id}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                           <span style={{fontWeight: 600}}>{vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           <span className={`badge ${vale.tipo === 'servicio' ? 'bg-primary' : 'bg-danger'}`}>

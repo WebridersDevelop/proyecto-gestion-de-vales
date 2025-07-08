@@ -40,8 +40,27 @@ function AppContent() {
 
   return (
     <>
-      {/* Mensaje de depuración del rol */}
-      <p style={{color: 'black', textAlign: 'center'}}>Rol actual: {rol ? rol : 'No definido'}</p>
+      {/* Badge de rol elegante */}
+      {rol && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          marginTop: 12,
+          marginBottom: 8
+        }}>
+          <span style={{
+            background: '#e0e7ff',
+            color: '#3730a3',
+            borderRadius: 12,
+            padding: '4px 16px',
+            fontWeight: 600,
+            fontSize: 14,
+            boxShadow: '0 1px 4px #0001'
+          }}>
+            Rol: {rol.charAt(0).toUpperCase() + rol.slice(1)}
+          </span>
+        </div>
+      )}
 
       <main>
         <Routes>

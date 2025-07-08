@@ -4,23 +4,24 @@ import { Row, Col, Card } from 'react-bootstrap';
 
 const buttonStyles = {
   base: {
-    minWidth: 120,
-    minHeight: 110,
-    fontSize: 18,
+    minWidth: 130,
+    minHeight: 120,
+    fontSize: 19,
     border: 'none',
     borderRadius: 18,
-    boxShadow: '0 2px 8px #0001',
+    boxShadow: '0 2px 12px #0002',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'transform 0.12s, box-shadow 0.12s',
-    margin: 8,
+    transition: 'transform 0.13s, box-shadow 0.13s',
+    margin: 12,
     cursor: 'pointer',
-    fontWeight: 600,
+    fontWeight: 700,
     outline: 'none',
     background: '#f3f4f6',
-    color: '#1e293b'
+    color: '#1e293b',
+    gap: 6
   },
   dashboard: { background: '#e0e7ff', color: '#3730a3' },
   vales: { background: '#d1fae5', color: '#047857' },
@@ -84,26 +85,36 @@ function HomeObento() {
     <>
       <Row className="justify-content-center mt-4">
         <Col xs={12} md={8} lg={6}>
-          <Card className="shadow-sm p-4">
-            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Bienvenido</Card.Title>
-            <div className="d-flex flex-wrap justify-content-center gap-2">
-              {botones.map((btn, i) => (
-                <button
-                  key={btn.label}
-                  type="button"
-                  style={{
-                    ...buttonStyles.base,
-                    ...btn.style
-                  }}
-                  onClick={() => btn.to ? navigate(btn.to) : btn.action()}
-                  onMouseOver={e => e.currentTarget.style.transform = 'scale(1.06)'}
-                  onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  <i className={`bi ${btn.icon}`} style={{fontSize: 38, marginBottom: 8}}></i>
-                  {btn.label}
-                </button>
-              ))}
-            </div>
+          <Card className="shadow-sm border-0" style={{borderRadius: 22, background: "#fff"}}>
+            <Card.Body>
+              <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 26, color: "#6366f1"}}>
+                <i className="bi bi-house-door me-2"></i>Bienvenido
+              </Card.Title>
+              <div className="d-flex flex-wrap justify-content-center gap-3" style={{marginBottom: 10}}>
+                {botones.map((btn, i) => (
+                  <button
+                    key={btn.label}
+                    type="button"
+                    style={{
+                      ...buttonStyles.base,
+                      ...btn.style
+                    }}
+                    onClick={() => btn.to ? navigate(btn.to) : btn.action()}
+                    onMouseOver={e => {
+                      e.currentTarget.style.transform = 'scale(1.07)';
+                      e.currentTarget.style.boxShadow = '0 4px 18px #0002';
+                    }}
+                    onMouseOut={e => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = buttonStyles.base.boxShadow;
+                    }}
+                  >
+                    <i className={`bi ${btn.icon}`} style={{fontSize: 40, marginBottom: 8}}></i>
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            </Card.Body>
           </Card>
         </Col>
       </Row>

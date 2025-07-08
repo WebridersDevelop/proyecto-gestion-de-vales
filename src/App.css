@@ -1,16 +1,15 @@
 /* Fondo general */
-body, #root {
+body, html, #root {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  height: auto;
   background: white !important;
   color: #181818;
   font-family: 'Segoe UI', 'Arial', sans-serif;
-}
-
-/* Solo evita el scroll horizontal molesto */
-body {
   overflow-x: hidden;
+  /* Asegura scroll vertical siempre disponible */
+  overflow-y: auto;
 }
 
 /* Contenedor principal */
@@ -27,13 +26,8 @@ body {
 }
 
 /* Asegura que el contenido principal no quede tapado por el menú inferior */
-.container, .main-content, .page-content {
-  padding-bottom: 120px !important; /* Ajusta según el alto de tu menú inferior */
-}
-
-/* Cuadre diario */
-.cuadre-diario-container {
-  padding-bottom: 120px !important; /* Ajusta según el alto de tu menú inferior */
+.container, .main-content, .page-content, .cuadre-diario-container {
+  padding-bottom: 160px !important; /* Aumentado para dejar más espacio al menú inferior */
 }
 
 /* Botones */
@@ -167,10 +161,10 @@ h2, h4 {
   background: #fff;
   border-top: 1px solid #e0e0e0;
   z-index: 1000;
-  height: 90px;         /* Más alto para dejar espacio abajo */
+  height: 90px;
   min-height: 90px;
   display: flex;
-  align-items: flex-start; /* Mantén flex-start */
+  align-items: flex-start;
   justify-content: center;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
   padding: 0;
@@ -360,5 +354,5 @@ h2, h4 {
 
 /* Espaciador actualizado: solo el espacio seguro del dispositivo */
 .bottom-spacer {
-  height: env(safe-area-inset-bottom, 0);
+  height: 90px; /* igual a la altura de .bottom-nav */
 }

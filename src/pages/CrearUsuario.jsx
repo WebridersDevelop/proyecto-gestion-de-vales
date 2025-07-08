@@ -44,11 +44,13 @@ function CrearUsuario() {
 
   return (
     <Row className="justify-content-center mt-4">
-      <Col xs={12} md={8} lg={6}>
-        <Card className="shadow-sm">
+      <Col xs={12} md={8} lg={6} xl={5}>
+        <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
           <Card.Body>
-            <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Crear Usuario</Card.Title>
-            <Form onSubmit={handleSubmit}>
+            <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 24, color: "#6366f1"}}>
+              <i className="bi bi-person-plus me-2"></i>Crear Usuario
+            </Card.Title>
+            <Form onSubmit={handleSubmit} className="p-2" style={{background: "#f9fafb", borderRadius: 12}}>
               <Form.Group className="mb-3" controlId="uid">
                 <Form.Label>UID (de Firebase Auth)</Form.Label>
                 <Form.Control
@@ -80,7 +82,7 @@ function CrearUsuario() {
                   onChange={e => setNombre(e.target.value)}
                 />
               </Form.Group>
-              <Form.Group className="mb-3" controlId="rolUsuario">
+              <Form.Group className="mb-4" controlId="rolUsuario">
                 <Form.Label>Rol</Form.Label>
                 <Form.Select value={rolUsuario} onChange={e => setRolUsuario(e.target.value)}>
                   <option value="peluquero">Peluquero</option>
@@ -89,11 +91,20 @@ function CrearUsuario() {
                 </Form.Select>
               </Form.Group>
               <div className="d-grid">
-                <Button variant="success" type="submit" disabled={loading} style={{background: '#16a34a', borderColor: '#16a34a'}}>
-                  {loading ? "Creando..." : "Crear Usuario"}
+                <Button
+                  variant="success"
+                  type="submit"
+                  disabled={loading}
+                  style={{background: '#16a34a', borderColor: '#16a34a', fontWeight: 600, fontSize: 17}}
+                >
+                  {loading ? <><span className="spinner-border spinner-border-sm me-2"></span>Creando...</> : <><i className="bi bi-person-plus me-1"></i>Crear Usuario</>}
                 </Button>
               </div>
-              {mensaje && <Alert className="mt-3" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>{mensaje}</Alert>}
+              {mensaje && (
+                <Alert className="mt-3 mb-0" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>
+                  {mensaje}
+                </Alert>
+              )}
             </Form>
           </Card.Body>
         </Card>

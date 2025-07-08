@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Card, Row, Col, Spinner, Alert, Table, Form, Button, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import jsPDF from 'jspdf';
@@ -26,32 +26,14 @@ function CuadreDiario() {
   const [hasta, setHasta] = useState(hoy);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const valesServicioSnap = await getDocs(collection(db, 'vales_servicio'));
-        const valesGastoSnap = await getDocs(collection(db, 'vales_gasto'));
-        const valesServicio = [];
-        const valesGasto = [];
+    setLoading(true);
+    let valesServicio = [];
+    let valesGasto = [];
+    let unsub1, unsub2;
+    let isMounted = true;
 
-        valesServicioSnap.forEach(doc => {
-          const data = doc.data();
-          valesServicio.push({
-            ...data,
-            tipo: 'Ingreso',
-            id: doc.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
-          });
-        });
-        valesGastoSnap.forEach(doc => {
-          const data = doc.data();
-          valesGasto.push({
-            ...data,
-            tipo: 'Egreso',
-            id: doc.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
-          });
-        });
-
+    const updateVales = () => {
+      if (isMounted) {
         const todos = [...valesServicio, ...valesGasto];
         setVales(todos);
 
@@ -60,21 +42,54 @@ function CuadreDiario() {
           new Set(todos.map(v => v.peluqueroEmail || 'Desconocido'))
         );
         setUsuarios(usuariosUnicos);
-
-        // Carga todos los usuarios y sus nombres
-        const usuariosSnap = await getDocs(collection(db, 'usuarios'));
-        const nombres = {};
-        usuariosSnap.forEach(docu => {
-          const data = docu.data();
-          nombres[data.email] = data.nombre || '';
-        });
-        setNombresUsuarios(nombres);
-      } catch (err) {
-        setError('Error al cargar los datos');
       }
-      setLoading(false);
     };
-    fetchData();
+
+    unsub1 = onSnapshot(collection(db, 'vales_servicio'), snap => {
+      valesServicio = [];
+      snap.forEach(doc => {
+        const data = doc.data();
+        valesServicio.push({
+          ...data,
+          tipo: 'Ingreso',
+          id: doc.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
+      });
+      updateVales();
+      setLoading(false);
+    });
+
+    unsub2 = onSnapshot(collection(db, 'vales_gasto'), snap => {
+      valesGasto = [];
+      snap.forEach(doc => {
+        const data = doc.data();
+        valesGasto.push({
+          ...data,
+          tipo: 'Egreso',
+          id: doc.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
+      });
+      updateVales();
+      setLoading(false);
+    });
+
+    // Carga todos los usuarios y sus nombres (esto puede quedar con getDocs porque no cambia mucho)
+    getDocs(collection(db, 'usuarios')).then(usuariosSnap => {
+      const nombres = {};
+      usuariosSnap.forEach(docu => {
+        const data = docu.data();
+        nombres[data.email] = data.nombre || '';
+      });
+      setNombresUsuarios(nombres);
+    }).catch(() => setError('Error al cargar los datos'));
+
+    return () => {
+      isMounted = false;
+      unsub1 && unsub1();
+      unsub2 && unsub2();
+    };
   }, []);
 
   const handleFiltro = (e) => {
@@ -100,6 +115,7 @@ function CuadreDiario() {
     doc.text(`Ingresos: $${totalIngresos.toLocaleString()}`, 14, 32);
     doc.text(`Egresos: $${totalEgresos.toLocaleString()}`, 14, 38);
     doc.text(`Saldo Neto: $${saldoNeto.toLocaleString()}`, 14, 44);
+    doc.text(`Pendiente: $${totalPendiente.toLocaleString()}`, 14, 50);
 
     // Tabla de vales
     const rows = [];
@@ -120,8 +136,35 @@ function CuadreDiario() {
     autoTable(doc, {
       head: [['Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'Forma de Pago', 'Valor', 'Estado', 'Aprobado por', 'Usuario']],
       body: rows,
-      startY: 50,
-      styles: { fontSize: 9 }
+      startY: 56,
+      styles: { fontSize: 9 },
+      didParseCell: function (data) {
+        // Colorea tipo
+        if (data.section === 'body' && data.column.index === 2) {
+          if (data.cell.raw === 'Ingreso') {
+            data.cell.styles.textColor = [34, 197, 94]; // verde
+          }
+          if (data.cell.raw === 'Egreso') {
+            data.cell.styles.textColor = [220, 53, 69]; // rojo
+          }
+        }
+        // Colorea estado
+        if (data.section === 'body' && data.column.index === 6) {
+          if (data.cell.raw === 'aprobado' || data.cell.raw === 'Aprobado') {
+            data.cell.styles.textColor = [34, 197, 94];
+          }
+          if (data.cell.raw === 'pendiente' || data.cell.raw === 'Pendiente') {
+            data.cell.styles.textColor = [245, 158, 66];
+          }
+          if (data.cell.raw === 'rechazado' || data.cell.raw === 'Rechazado') {
+            data.cell.styles.textColor = [220, 53, 69];
+          }
+        }
+        // Montos a la derecha
+        if (data.column.index === 5) {
+          data.cell.styles.halign = 'right';
+        }
+      }
     });
 
     doc.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
@@ -142,16 +185,21 @@ function CuadreDiario() {
     return true;
   });
 
-  // Resumen contable (solo vales aprobados o pendientes)
+  // Resumen contable (solo vales aprobados)
   const totalIngresos = valesFiltrados
-    .filter(v => v.tipo === 'Ingreso' && v.estado !== 'rechazado')
-    .reduce((acc, v) => acc + (Number(v.valor) || 0), 0);
+    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
 
   const totalEgresos = valesFiltrados
-    .filter(v => v.tipo === 'Egreso' && v.estado !== 'rechazado')
-    .reduce((acc, v) => acc + (Number(v.valor) || 0), 0);
+    .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
+    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
 
   const saldoNeto = totalIngresos - totalEgresos;
+
+  // Total pendiente (solo pendientes)
+  const totalPendiente = valesFiltrados
+    .filter(v => v.estado === 'pendiente')
+    .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
 
   // Agrupa por usuario
   const agrupados = {};
@@ -165,65 +213,81 @@ function CuadreDiario() {
     <div className="cuadre-diario-container">
       <Row className="justify-content-center mt-4">
         <Col xs={12} md={11} lg={10}>
-          <Card className="shadow-sm">
+          <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title className="mb-4 text-center" style={{fontWeight: 600, letterSpacing: '-1px'}}>Listado de Vales</Card.Title>
-              <Form className="mb-4 d-flex flex-wrap gap-3 justify-content-center">
-                <Form.Group>
-                  <Form.Label>Usuario</Form.Label>
-                  <Form.Select name="usuario" value={filtros.usuario} onChange={handleFiltro}>
-                    <option value="">Todos</option>
-                    {usuarios.map(u => (
-                      <option key={u} value={u}>
-                        {nombresUsuarios[u] ? `${nombresUsuarios[u]} (${u})` : u}
-                      </option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Tipo</Form.Label>
-                  <Form.Select name="tipo" value={filtros.tipo || ''} onChange={handleFiltro}>
-                    <option value="">Todos</option>
-                    <option value="Ingreso">Ingreso</option>
-                    <option value="Egreso">Egreso</option>
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Estado</Form.Label>
-                  <Form.Select name="estado" value={filtros.estado || ''} onChange={handleFiltro}>
-                    <option value="">Todos</option>
-                    <option value="aprobado">Aprobado</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="rechazado">Rechazado</option>
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Local</Form.Label>
-                  <Form.Select name="local" value={filtros.local || ''} onChange={handleFiltro}>
-                    <option value="">Todos</option>
-                    <option value="La Tirana">La Tirana</option>
-                    <option value="Salvador Allende">Salvador Allende</option>
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Desde</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={desde}
-                    max={hasta}
-                    onChange={e => setDesde(e.target.value)}
-                  />
-                </Form.Group>
-                <Form.Group>
-                  <Form.Label>Hasta</Form.Label>
-                  <Form.Control
-                    type="date"
-                    value={hasta}
-                    min={desde}
-                    max={hoy}
-                    onChange={e => setHasta(e.target.value)}
-                  />
-                </Form.Group>
+              <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 26}}>
+                <i className="bi bi-journal-check me-2"></i>Listado de Vales
+              </Card.Title>
+              <Form className="mb-4">
+                <Row className="g-3 justify-content-center">
+                  <Col xs={12} sm={6} md={3}>
+                    <Form.Group>
+                      <Form.Label>Usuario</Form.Label>
+                      <Form.Select name="usuario" value={filtros.usuario} onChange={handleFiltro}>
+                        <option value="">Todos</option>
+                        {usuarios.map(u => (
+                          <option key={u} value={u}>
+                            {nombresUsuarios[u] ? `${nombresUsuarios[u]} (${u})` : u}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6} md={2}>
+                    <Form.Group>
+                      <Form.Label>Tipo</Form.Label>
+                      <Form.Select name="tipo" value={filtros.tipo || ''} onChange={handleFiltro}>
+                        <option value="">Todos</option>
+                        <option value="Ingreso">Ingreso</option>
+                        <option value="Egreso">Egreso</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6} md={2}>
+                    <Form.Group>
+                      <Form.Label>Estado</Form.Label>
+                      <Form.Select name="estado" value={filtros.estado || ''} onChange={handleFiltro}>
+                        <option value="">Todos</option>
+                        <option value="aprobado">Aprobado</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="rechazado">Rechazado</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6} md={2}>
+                    <Form.Group>
+                      <Form.Label>Local</Form.Label>
+                      <Form.Select name="local" value={filtros.local || ''} onChange={handleFiltro}>
+                        <option value="">Todos</option>
+                        <option value="La Tirana">La Tirana</option>
+                        <option value="Salvador Allende">Salvador Allende</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={6} sm={3} md={1}>
+                    <Form.Group>
+                      <Form.Label>Desde</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={desde}
+                        max={hasta}
+                        onChange={e => setDesde(e.target.value)}
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col xs={6} sm={3} md={1}>
+                    <Form.Group>
+                      <Form.Label>Hasta</Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={hasta}
+                        min={desde}
+                        max={hoy}
+                        onChange={e => setHasta(e.target.value)}
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
               </Form>
               {filtros.usuario && (
                 <div style={{ textAlign: 'center', marginBottom: 15 }}>
@@ -233,7 +297,7 @@ function CuadreDiario() {
               <Row className="mb-3">
                 <Col>
                   <Card className="border-0 shadow-sm" style={{borderRadius: 18}}>
-                    <Card.Body style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
+                    <Card.Body style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', background: "#f9fafb" }}>
                       <div>
                         <div><b>Ingresos</b></div>
                         <div style={{ color: '#22c55e', fontSize: 20, fontWeight: 600 }}>${totalIngresos.toLocaleString()}</div>
@@ -245,6 +309,10 @@ function CuadreDiario() {
                       <div>
                         <div><b>Saldo Neto</b></div>
                         <div style={{ color: saldoNeto >= 0 ? '#22c55e' : '#dc3545', fontSize: 20, fontWeight: 600 }}>${saldoNeto.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div><b>Saldo Pendiente</b></div>
+                        <div style={{ color: '#f59e42', fontSize: 20, fontWeight: 600 }}>${totalPendiente.toLocaleString()}</div>
                       </div>
                     </Card.Body>
                   </Card>
@@ -259,22 +327,30 @@ function CuadreDiario() {
                     Tarjetas
                   </ToggleButton>
                 </ToggleButtonGroup>
+                <Button variant="primary" size="sm" className="ms-3" onClick={handleExportPDF}>
+                  <i className="bi bi-file-earmark-arrow-down me-1"></i>Descargar PDF
+                </Button>
               </div>
-              <Button variant="outline-secondary" size="sm" className="mb-3" onClick={handleExportPDF}>
-                Descargar PDF del resumen
-              </Button>
               {Object.keys(agrupados).length === 0 ? (
                 <Alert variant="info">No hay vales para mostrar.</Alert>
               ) : (
                 Object.keys(agrupados).map(email => {
                   const lista = agrupados[email].sort((a, b) => b.fecha - a.fecha);
                   const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || '';
-                  const total = lista.reduce((acc, v) => {
-                    if (v.estado !== 'rechazado') {
-                      return acc + (v.tipo === 'Ingreso' ? Number(v.valor) || 0 : -Number(v.valor) || 0);
-                    }
-                    return acc;
-                  }, 0);
+
+                  const totalIngresosU = lista
+                    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+                    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
+                  const totalEgresosU = lista
+                    .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
+                    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
+                  const saldoU = totalIngresosU - totalEgresosU;
+
+                  const totalPendienteU = lista
+                    .filter(v => v.estado === 'pendiente')
+                    .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
 
                   return (
                     <div key={email} className="mb-5">
@@ -283,37 +359,40 @@ function CuadreDiario() {
                           ? (nombresUsuarios[email] ? `${nombresUsuarios[email]} (${email})` : email)
                           : email}
                       </h5>
-                      {/* Resumen por usuario */}
                       <div className="mb-2">
                         <span style={{color:'#22c55e', fontWeight:600}}>
-                          Ingresos: ${lista
-                            .filter(v => v.tipo === 'Ingreso' && v.estado !== 'rechazado')
-                            .reduce((a, v) => a + (Number(v.valor) || 0), 0)
-                            .toLocaleString()}
+                          Ingresos: ${totalIngresosU.toLocaleString()}
                         </span>
                         {' | '}
                         <span style={{color:'#dc3545', fontWeight:600}}>
-                          Egresos: ${lista
-                            .filter(v => v.tipo === 'Egreso' && v.estado !== 'rechazado')
-                            .reduce((a, v) => a + (Number(v.valor) || 0), 0)
-                            .toLocaleString()}
+                          Egresos: ${totalEgresosU.toLocaleString()}
                         </span>
                         {' | '}
-                        <span style={{color:total>=0?'#22c55e':'#dc3545', fontWeight:600}}>
-                          Saldo: ${total.toLocaleString()}
+                        <span style={{color:saldoU>=0?'#22c55e':'#dc3545', fontWeight:600}}>
+                          Saldo: ${saldoU.toLocaleString()}
+                        </span>
+                        {' | '}
+                        <span style={{color:'#f59e42', fontWeight:600}}>
+                          Pendiente: ${totalPendienteU.toLocaleString()}
                         </span>
                       </div>
                       {vista === 'cards' ? (
                         <Row xs={1} md={2} lg={3} className="g-3">
                           {lista.map(vale => (
                             <Col key={vale.id}>
-                              <div className={`vale-card ${vale.tipo === 'Egreso' ? 'egreso' : ''}`}>
+                              <div className={`vale-card ${vale.tipo === 'Egreso' ? 'egreso' : ''} shadow-sm p-3 mb-2 bg-white rounded`}>
                                 <div>
                                   <b>{vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
                                   <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'} ms-2`}>
                                     {vale.tipo}
                                   </span>
-                                  <span className={`badge bg-secondary ms-2`}>
+                                  <span className={`badge ms-2 ${
+                                    vale.estado === 'aprobado'
+                                      ? 'bg-success'
+                                      : vale.estado === 'rechazado'
+                                      ? 'bg-danger'
+                                      : 'bg-warning text-dark'
+                                  }`}>
                                     {vale.estado === 'aprobado'
                                       ? 'Aprobado'
                                       : vale.estado === 'rechazado'
@@ -359,7 +438,8 @@ function CuadreDiario() {
                           ))}
                           <Col xs={12}>
                             <div className="text-end mt-2" style={{fontWeight: 'bold', fontSize: 16}}>
-                              Total: <span style={{color: total >= 0 ? '#22c55e' : '#dc3545'}}>${total.toLocaleString()}</span>
+                              Saldo: <span style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</span>
+                              <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
                             </div>
                           </Col>
                         </Row>
@@ -373,7 +453,7 @@ function CuadreDiario() {
                                 <th>Tipo</th>
                                 <th>Servicio/Concepto</th>
                                 <th>Forma de Pago</th>
-                                <th>Local</th> {/* NUEVO */}
+                                <th>Local</th>
                                 <th>Monto</th>
                                 <th>Estado</th>
                                 <th>Aprobado por</th>
@@ -393,7 +473,7 @@ function CuadreDiario() {
                                   </td>
                                   <td>{vale.servicio || vale.concepto || '-'}</td>
                                   <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                                  <td>{vale.local || '-'}</td> {/* NUEVO */}
+                                  <td>{vale.local || '-'}</td>
                                   <td style={{ color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
                                     {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
                                   </td>
@@ -442,8 +522,11 @@ function CuadreDiario() {
                                 </tr>
                               ))}
                               <tr>
-                                <td colSpan={7} className="text-end"><b>Total</b></td>
-                                <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 3 : 2}><b>${total.toLocaleString()}</b></td>
+                                <td colSpan={7} className="text-end"><b>Saldo</b></td>
+                                <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 3 : 2}>
+                                  <b style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</b>
+                                  <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
+                                </td>
                               </tr>
                             </tbody>
                           </Table>

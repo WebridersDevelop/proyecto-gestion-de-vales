@@ -2,7 +2,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { Card, Row, Col, Spinner, Alert } from 'react-bootstrap';
+import { Card, Row, Col, Spinner, Alert, Badge } from 'react-bootstrap';
 import { Bar, Pie } from 'react-chartjs-2';
 import { Chart, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js';
 
@@ -89,7 +89,7 @@ function Dashboard() {
     datasets: [
       {
         data: [stats.valesAprobados, stats.valesPendientes, stats.valesRechazados],
-        backgroundColor: ['#6EE7B7', '#FDE68A', '#FCA5A5'],
+        backgroundColor: ['#22c55e', '#f59e42', '#ef4444'],
         borderWidth: 1,
         borderColor: '#fff'
       },
@@ -103,13 +103,17 @@ function Dashboard() {
   };
 
   return (
-    <div>
-      <h3 className="mb-4" style={{fontWeight: 600, letterSpacing: '-1px'}}>Dashboard</h3>
+    <div style={{ paddingBottom: 24 }}>
+      <h3 className="mb-4" style={{fontWeight: 700, letterSpacing: '-1px'}}>
+        <i className="bi bi-bar-chart-fill me-2"></i>Dashboard
+      </h3>
       <Row className="mb-4">
         <Col md={8} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 20}}>Resumen Económico</Card.Title>
+              <Card.Title style={{fontWeight: 600, fontSize: 20}}>
+                <i className="bi bi-graph-up-arrow me-2"></i>Resumen Económico
+              </Card.Title>
               <div style={{maxWidth: 500, margin: '0 auto'}}>
                 <Bar data={barData} options={barOptions} />
               </div>
@@ -119,9 +123,16 @@ function Dashboard() {
         <Col md={4} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 20}}>Estados de Vales</Card.Title>
+              <Card.Title style={{fontWeight: 600, fontSize: 20}}>
+                <i className="bi bi-pie-chart-fill me-2"></i>Estados de Vales
+              </Card.Title>
               <div style={{maxWidth: 250, margin: '0 auto'}}>
                 <Pie data={pieData} options={pieOptions} />
+              </div>
+              <div className="mt-3 d-flex justify-content-center gap-2">
+                <Badge bg="success" style={{fontSize: 13}}>Aprobados: {stats.valesAprobados}</Badge>
+                <Badge bg="warning" text="dark" style={{fontSize: 13}}>Pendientes: {stats.valesPendientes}</Badge>
+                <Badge bg="danger" style={{fontSize: 13}}>Rechazados: {stats.valesRechazados}</Badge>
               </div>
             </Card.Body>
           </Card>
@@ -131,32 +142,40 @@ function Dashboard() {
         <Col md={3} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#6EE7B7'}}>Ingresos</Card.Title>
-              <Card.Text style={{fontSize: 22, color: '#059669', fontWeight: 600}}>${stats.ingresos.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 600, fontSize: 16, color: '#22c55e'}}>
+                <i className="bi bi-cash-coin me-1"></i>Ingresos
+              </Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#059669', fontWeight: 700}}>${stats.ingresos.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#FCA5A5'}}>Egresos</Card.Title>
-              <Card.Text style={{fontSize: 22, color: '#dc2626', fontWeight: 600}}>${stats.egresos.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 600, fontSize: 16, color: '#ef4444'}}>
+                <i className="bi bi-cash-stack me-1"></i>Egresos
+              </Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#dc2626', fontWeight: 700}}>${stats.egresos.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 16, color: stats.saldo >= 0 ? '#6EE7B7' : '#FCA5A5'}}>Saldo Neto</Card.Title>
-              <Card.Text style={{fontSize: 22, color: stats.saldo >= 0 ? '#059669' : '#dc2626', fontWeight: 600}}>${stats.saldo.toLocaleString()}</Card.Text>
+              <Card.Title style={{fontWeight: 600, fontSize: 16, color: stats.saldo >= 0 ? '#22c55e' : '#ef4444'}}>
+                <i className="bi bi-wallet2 me-1"></i>Saldo Neto
+              </Card.Title>
+              <Card.Text style={{fontSize: 22, color: stats.saldo >= 0 ? '#059669' : '#dc2626', fontWeight: 700}}>${stats.saldo.toLocaleString()}</Card.Text>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3} className="mb-3">
           <Card className="text-center border-0 shadow-sm" style={{borderRadius: 18}}>
             <Card.Body>
-              <Card.Title style={{fontWeight: 500, fontSize: 16, color: '#6366f1'}}>Total de Vales</Card.Title>
-              <Card.Text style={{fontSize: 22, color: '#6366f1', fontWeight: 600}}>{stats.totalVales}</Card.Text>
+              <Card.Title style={{fontWeight: 600, fontSize: 16, color: '#6366f1'}}>
+                <i className="bi bi-clipboard-data me-1"></i>Total de Vales
+              </Card.Title>
+              <Card.Text style={{fontSize: 22, color: '#6366f1', fontWeight: 700}}>{stats.totalVales}</Card.Text>
             </Card.Body>
           </Card>
         </Col>

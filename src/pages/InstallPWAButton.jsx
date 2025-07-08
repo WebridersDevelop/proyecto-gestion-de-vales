@@ -13,7 +13,10 @@ function InstallPWAButton() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  if (!deferredPrompt) return null;
+  if (!deferredPrompt) {
+    // return <span>Instala la app desde el menú de tu navegador</span>;
+    return null;
+  }
 
   return (
     <button
