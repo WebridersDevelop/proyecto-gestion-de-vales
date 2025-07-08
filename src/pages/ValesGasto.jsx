@@ -50,16 +50,19 @@ function ValesGasto() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return; // Previene doble submit
+    setLoading(true);    // Deshabilita el botón inmediatamente
     setMensaje('');
     if (!concepto.trim() || !valor) {
       setMensaje('Completa todos los campos');
+      setLoading(false);
       return;
     }
     if (isNaN(valor) || Number(valor) <= 0) {
       setMensaje('El valor debe ser un número positivo');
+      setLoading(false);
       return;
     }
-    setLoading(true);
     try {
       let nombre = nombreActual;
       if (!nombre) {
@@ -85,12 +88,16 @@ function ValesGasto() {
       if (valorRef.current) valorRef.current.blur();
 
       setMensaje('¡Vale de gasto enviado correctamente!');
-      setTimeout(() => setMensaje(''), 2000);
+      // Mantén el botón deshabilitado mientras se muestra el mensaje
+      setTimeout(() => {
+        setMensaje('');
+        setLoading(false);
+      }, 2000);
     } catch (error) {
       setMensaje('Error al enviar el vale');
       setTimeout(() => setMensaje(''), 2000);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Filtro por fecha seleccionada

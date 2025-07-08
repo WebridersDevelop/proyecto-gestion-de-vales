@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,8 @@ function ValesServicio() {
   const [valesUsuario, setValesUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
+  const servicioRef = useRef(null);
+  const valorRef = useRef(null);
 
   useEffect(() => {
     const fetchNombre = async () => {
@@ -48,16 +50,22 @@ function ValesServicio() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return; // <--- Evita doble submit por si acaso
+
+    setLoading(true); // <--- Activa loading lo antes posible
     setMensaje('');
+
     if (!servicio.trim() || !valor) {
       setMensaje('Completa todos los campos');
+      setLoading(false);
       return;
     }
     if (isNaN(valor) || Number(valor) <= 0) {
       setMensaje('El valor debe ser un número positivo');
+      setLoading(false);
       return;
     }
-    setLoading(true);
+
     try {
       let nombre = nombreActual;
       if (!nombre) {
@@ -78,13 +86,20 @@ function ValesServicio() {
 
       setServicio('');
       setValor('');
+      if (servicioRef.current) servicioRef.current.blur();
+      if (valorRef.current) valorRef.current.blur();
+
       setMensaje('¡Vale enviado correctamente!');
-      setTimeout(() => setMensaje(''), 2000);
+      // Mantén el botón deshabilitado mientras se muestra el mensaje
+      setTimeout(() => {
+        setMensaje('');
+        setLoading(false);
+      }, 2000);
     } catch (error) {
       setMensaje('Error al enviar el vale');
       setTimeout(() => setMensaje(''), 2000);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const valesFiltrados = valesUsuario.filter(vale => {
@@ -125,6 +140,7 @@ function ValesServicio() {
                           value={servicio}
                           onChange={e => setServicio(e.target.value)}
                           autoFocus
+                          ref={servicioRef}
                         />
                       </Form.Group>
                     </Col>
@@ -137,6 +153,7 @@ function ValesServicio() {
                           value={valor}
                           onChange={e => setValor(e.target.value)}
                           min={1}
+                          ref={valorRef}
                         />
                       </Form.Group>
                     </Col>
