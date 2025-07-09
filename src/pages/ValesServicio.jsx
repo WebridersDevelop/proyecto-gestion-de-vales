@@ -50,6 +50,7 @@ function ValesServicio() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("Usuario actual:", user); // <-- Aquí sí funciona
     if (loading) return; // <--- Evita doble submit por si acaso
 
     setLoading(true); // <--- Activa loading lo antes posible
@@ -96,6 +97,7 @@ function ValesServicio() {
         setLoading(false);
       }, 2000);
     } catch (error) {
+      console.error("Error al enviar el vale:", error);
       setMensaje('Error al enviar el vale');
       setTimeout(() => setMensaje(''), 2000);
       setLoading(false);
@@ -103,8 +105,11 @@ function ValesServicio() {
   };
 
   const valesFiltrados = valesUsuario.filter(vale => {
-    const fechaVale = vale.fecha.toISOString().slice(0, 10);
-    return fechaVale === fechaFiltro;
+    // Convierte ambas fechas a local y compara solo el año-mes-día
+    const fechaValeLocal = new Date(vale.fecha.getTime() - vale.fecha.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    return fechaValeLocal === fechaFiltro;
   });
 
   if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
@@ -280,3 +285,12 @@ function getHoyLocal() {
 }
 
 export default ValesServicio;
+
+/* 
+  Reglas de seguridad de Firestore para la colección 'vales_servicio':
+
+  allow read, write: if request.auth != null;
+
+  - Permite a los usuarios autenticados leer y escribir en la colección.
+  - Los usuarios no autenticados no podrán acceder a esta colección.
+*/

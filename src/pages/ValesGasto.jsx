@@ -102,8 +102,11 @@ function ValesGasto() {
 
   // Filtro por fecha seleccionada
   const valesFiltrados = valesUsuario.filter(vale => {
-    const fechaVale = vale.fecha.toISOString().slice(0, 10);
-    return fechaVale === fechaFiltro;
+    // Convierte ambas fechas a local y compara solo el año-mes-día
+    const fechaValeLocal = new Date(vale.fecha.getTime() - vale.fecha.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    return fechaValeLocal === fechaFiltro;
   });
 
   if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {

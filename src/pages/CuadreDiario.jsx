@@ -179,9 +179,12 @@ function CuadreDiario() {
     if (filtros.tipo && v.tipo !== filtros.tipo) return false;
     if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
     if (filtros.local && v.local !== filtros.local) return false;
-    const fechaVale = v.fecha.toISOString().slice(0, 10);
-    if (fechaVale < desde) return false;
-    if (fechaVale > hasta) return false;
+    // Ajusta la fecha a local antes de comparar
+    const fechaValeLocal = new Date(v.fecha.getTime() - v.fecha.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    if (fechaValeLocal < desde) return false;
+    if (fechaValeLocal > hasta) return false;
     return true;
   });
 
