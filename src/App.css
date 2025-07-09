@@ -299,6 +299,36 @@ h2, h4 {
     width: 100%;
     min-width: 90px;
   }
+  .cuadre-diario-container table {
+    font-size: 12px !important;
+    min-width: 700px !important;
+  }
+  .cuadre-diario-container th, .cuadre-diario-container td {
+    padding: 4px 4px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 110px;
+  }
+  .cuadre-diario-container th {
+    font-size: 11px !important;
+  }
+  .cuadre-diario-container .card-body > .row.mb-3 > .col > .card > .card-body {
+    font-size: 0.95rem !important;
+    padding: 10px 2px !important;
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .cuadre-diario-container .card-body > .row.mb-3 > .col > .card > .card-body > div {
+    min-width: 48%;
+    margin-bottom: 2px;
+    text-align: right;
+  }
+  .cuadre-diario-container .card-body > .row.mb-3 > .col > .card > .card-body > div > div {
+    font-size: 0.97rem !important;
+  }
 }
 
 /* Badges homologados */
@@ -355,4 +385,130 @@ h2, h4 {
 /* Espaciador actualizado: solo el espacio seguro del dispositivo */
 .bottom-spacer {
   height: 90px; /* igual a la altura de .bottom-nav */
+}
+
+/* Resumen de caja */
+.resumen-caja {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px 24px;
+  justify-items: center;
+  align-items: end;
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin-bottom: 18px;
+  margin-top: 10px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 8px 2px 8px;
+}
+.resumen-caja > div {
+  text-align: center;
+  min-width: 90px;
+}
+.resumen-caja .ingresos { color: #16a34a; }
+.resumen-caja .egresos { color: #ef4444; }
+.resumen-caja .saldo { color: #2563eb; }
+.resumen-caja .pendiente { color: #f59e42; }
+.resumen-caja .percibido { color: #6366f1; }
+
+@media (max-width: 900px) {
+  .resumen-caja {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 16px;
+    font-size: 1rem;
+    padding: 8px 4px 2px 4px;
+  }
+}
+@media (max-width: 600px) {
+  .resumen-caja {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    font-size: 0.97rem;
+    padding: 6px 2px 2px 2px;
+  }
+  .resumen-caja > div {
+    min-width: 0;
+    text-align: right;
+    margin-bottom: 2px;
+  }
+}
+
+/* Resumen de caja obento */
+.resumen-caja-obento {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px 12px;
+  justify-items: center;
+  align-items: stretch;
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin-bottom: 0;
+  margin-top: 0;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 8px 8px 8px;
+  text-align: center;
+  box-shadow: 0 2px 12px #0001;
+}
+.resumen-caja-obento > div {
+  min-width: 100px;
+  max-width: 140px;
+  background: #f8fafc;
+  border-radius: 12px;
+  box-shadow: 0 1px 6px #0001;
+  padding: 10px 0 6px 0;
+  margin: 0 2px;
+  border: 1.5px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+  cursor: default;
+}
+.resumen-caja-obento > div:hover {
+  box-shadow: 0 4px 16px #2563eb22;
+  border-color: #2563eb;
+  transform: translateY(-2px) scale(1.03);
+}
+.resumen-caja-obento > div > div:first-child {
+  font-size: 1em;
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: #181818;
+  letter-spacing: 0.01em;
+}
+.resumen-caja-obento > div > div:last-child {
+  font-size: 1.12em;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-top: 2px;
+}
+.resumen-caja-obento .ingresos { color: #16a34a; }
+.resumen-caja-obento .egresos { color: #ef4444; }
+.resumen-caja-obento .saldo { color: #2563eb; }
+.resumen-caja-obento .pendiente { color: #f59e42; }
+.resumen-caja-obento .percibido { color: #6366f1; }
+
+@media (max-width: 900px) {
+  .resumen-caja-obento {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 16px;
+    font-size: 1rem;
+    padding: 8px 4px 2px 4px;
+  }
+}
+@media (max-width: 600px) {
+  .resumen-caja-obento {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    font-size: 0.97rem;
+    padding: 6px 2px 2px 2px;
+  }
+  .resumen-caja-obento > div {
+    min-width: 0;
+    text-align: right;
+    margin-bottom: 2px;
+  }
 }

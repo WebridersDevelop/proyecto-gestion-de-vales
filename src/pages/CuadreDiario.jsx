@@ -511,28 +511,28 @@ function CuadreDiario() {
               <Row className="mb-3">
                 <Col>
                   <Card className="border-0 shadow-sm" style={{borderRadius: 18}}>
-                    <Card.Body style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', background: "#f9fafb" }}>
-                      <div>
-                        <div><b>Ingresos</b></div>
-                        <div style={{ color: '#22c55e', fontSize: 20, fontWeight: 600 }}>${totalIngresos.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div><b>Egresos</b></div>
-                        <div style={{ color: '#dc3545', fontSize: 20, fontWeight: 600 }}>${totalEgresos.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div><b>Saldo Neto</b></div>
-                        <div style={{ color: saldoNeto >= 0 ? '#22c55e' : '#dc3545', fontSize: 20, fontWeight: 600 }}>${saldoNeto.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div><b>Saldo Pendiente</b></div>
-                        <div style={{ color: '#f59e42', fontSize: 20, fontWeight: 600 }}>${totalPendiente.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div><b>Monto Percibido</b></div>
-                        <div style={{ color: '#6366f1', fontSize: 20, fontWeight: 600 }}>${totalPercibido.toLocaleString()}</div>
-                      </div>
-                    </Card.Body>
+                    <Card.Body className="resumen-caja-obento">
+  <div>
+    <div>Ingresos</div>
+    <div className="ingresos">${totalIngresos.toLocaleString()}</div>
+  </div>
+  <div>
+    <div>Egresos</div>
+    <div className="egresos">${totalEgresos.toLocaleString()}</div>
+  </div>
+  <div>
+    <div>Saldo Neto</div>
+    <div className="saldo">${saldoNeto.toLocaleString()}</div>
+  </div>
+  <div>
+    <div>Saldo Pendiente</div>
+    <div className="pendiente">${totalPendiente.toLocaleString()}</div>
+  </div>
+  <div>
+    <div>Monto Percibido</div>
+    <div className="percibido">${totalPercibido.toLocaleString()}</div>
+  </div>
+</Card.Body>
                   </Card>
                 </Col>
               </Row>
@@ -719,8 +719,28 @@ function CuadreDiario() {
                             </thead>
                             <tbody>
                               {lista.map(vale => (
-                                <tr key={vale.id}>
-                                  <td style={{padding: '4px 6px'}}>{vale.codigo || '-'}</td>
+                                <tr
+                                  key={vale.id}
+                                  style={{
+                                    borderLeft: `6px solid ${
+                                      vale.estado === 'aprobado'
+                                        ? '#22c55e'
+                                        : vale.estado === 'rechazado'
+                                        ? '#dc3545'
+                                        : '#f59e42'
+                                    }`,
+                                    background: vale.estado === 'rechazado'
+                                      ? '#fef2f2'
+                                      : vale.estado === 'aprobado'
+                                      ? '#f0fdf4'
+                                      : '#fffbeb',
+                                    fontWeight: 500,
+                                    fontSize: 15,
+                                  }}
+                                >
+                                  <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
+                                    {vale.codigo || '-'}
+                                  </td>
                                   <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
                                   <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                   <td style={{padding: '4px 6px'}}>
@@ -728,13 +748,17 @@ function CuadreDiario() {
                                       {vale.tipo}
                                     </span>
                                   </td>
-                                  <td style={{padding: '4px 6px'}}>{vale.servicio || vale.concepto || '-'}</td>
+                                  <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
                                   <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
                                   <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
-                                  <td style={{padding: '4px 6px', color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
+                                  <td style={{
+                                    padding: '4px 6px',
+                                    color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
+                                    fontWeight: 700
+                                  }}>
                                     {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
                                   </td>
-                                  <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 600 }}>
+                                  <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
                                     ${getMontoPercibido(vale).toLocaleString()}
                                   </td>
                                   <td style={{padding: '4px 6px'}}>
@@ -754,12 +778,12 @@ function CuadreDiario() {
                                   </td>
                                   <td style={{padding: '4px 6px'}}>
                                     {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                      <span style={{ color: '#22c55e', fontWeight: 600 }}>
+                                      <span style={{ color: '#22c55e', fontWeight: 700 }}>
                                         <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
                                         {vale.aprobadoPor}
                                       </span>
                                     ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                      <span style={{ color: '#dc3545', fontWeight: 600 }}>
+                                      <span style={{ color: '#dc3545', fontWeight: 700 }}>
                                         <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
                                         {vale.aprobadoPor}
                                       </span>

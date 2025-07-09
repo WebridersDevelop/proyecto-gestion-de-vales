@@ -222,7 +222,8 @@ function ValesGasto() {
                         .toLocaleString()}
                     </div>
                   )}
-                  <div style={{overflowX: 'auto'}}>
+                  {/* Tabla para pantallas medianas y grandes */}
+                  <div className="d-none d-md-block" style={{overflowX: 'auto'}}>
                     <Table striped bordered hover size="sm" responsive="md" className="mb-0" style={{borderRadius: 12, overflow: 'hidden'}}>
                       <thead style={{background: "#f3f4f6"}}>
                         <tr>
@@ -242,36 +243,62 @@ function ValesGasto() {
                           </tr>
                         ) : (
                           valesFiltrados.map(vale => (
-                            <tr key={vale.id}>
-                              <td>{vale.codigo || '-'}</td>
+                            <tr
+                              key={vale.id}
+                              style={{
+                                borderLeft: `6px solid ${
+                                  vale.estado === 'aprobado'
+                                    ? '#22c55e'
+                                    : vale.estado === 'rechazado'
+                                    ? '#ef4444'
+                                    : '#f59e0b'
+                                }`,
+                                background: vale.estado === 'rechazado'
+                                  ? '#fef2f2'
+                                  : vale.estado === 'aprobado'
+                                  ? '#f0fdf4'
+                                  : '#fffbeb',
+                                fontWeight: 500,
+                                fontSize: 15,
+                              }}
+                            >
+                              <td style={{ fontWeight: 700, color: '#ef4444', background: '#f3f4f6' }}>
+                                {vale.codigo || 'G-000'}
+                              </td>
                               <td>{vale.fecha.toLocaleDateString()}</td>
                               <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td>{vale.concepto}</td>
-                              <td style={{fontWeight:600, color:'#ef4444'}}>${Number(vale.valor).toLocaleString()}</td>
+                              <td style={{ fontWeight: 600, color: '#374151' }}>{vale.concepto}</td>
+                              <td style={{ fontWeight: 700, color: '#ef4444' }}>
+                                ${Number(vale.valor).toLocaleString()}
+                              </td>
                               <td>
-                                <Badge bg={
-                                  vale.estado === 'aprobado'
-                                    ? 'success'
-                                    : vale.estado === 'rechazado'
-                                    ? 'danger'
-                                    : 'warning'
-                                } text={vale.estado === 'pendiente' ? 'dark' : undefined}>
+                                <Badge
+                                  bg={
+                                    vale.estado === 'aprobado'
+                                      ? 'success'
+                                      : vale.estado === 'rechazado'
+                                      ? 'danger'
+                                      : 'warning'
+                                  }
+                                  text={vale.estado === 'pendiente' ? 'dark' : undefined}
+                                  style={{ fontSize: '0.8rem' }}
+                                >
                                   {vale.estado === 'aprobado'
-                                    ? 'Aprobado'
+                                    ? 'OK'
                                     : vale.estado === 'rechazado'
-                                    ? 'Rechazado'
-                                    : 'Pendiente'}
+                                    ? 'NO'
+                                    : 'Pend.'}
                                 </Badge>
                               </td>
                               <td>
                                 {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#16a34a', fontWeight: 600 }}>
-                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                  <span style={{ color: '#16a34a', fontWeight: 700 }}>
+                                    <i className="bi bi-check-circle" style={{ marginRight: 4 }}></i>
                                     {vale.aprobadoPor}
                                   </span>
                                 ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#ef4444', fontWeight: 600 }}>
-                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                  <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                                    <i className="bi bi-x-circle" style={{ marginRight: 4 }}></i>
                                     {vale.aprobadoPor}
                                   </span>
                                 ) : (
@@ -283,6 +310,83 @@ function ValesGasto() {
                         )}
                       </tbody>
                     </Table>
+                  </div>
+
+                  {/* Vista optimizada para móviles - Lista compacta */}
+                  <div className="d-block d-md-none">
+                    {valesFiltrados.length === 0 ? (
+                      <div className="text-center text-muted p-4">
+                        <i className="bi bi-inbox" style={{fontSize: '2rem', opacity: 0.5}}></i>
+                        <p className="mt-2 mb-0">No tienes vales de gasto enviados para esta fecha.</p>
+                      </div>
+                    ) : (
+                      <div className="row g-2">
+                        {valesFiltrados.map(vale => (
+                          <div key={vale.id} className="col-12">
+                            <div className="card border-0 shadow-sm" style={{
+                              borderRadius: 8,
+                              borderLeft: `4px solid ${
+                                vale.estado === 'aprobado' ? '#22c55e' : 
+                                vale.estado === 'rechazado' ? '#ef4444' : '#f59e0b'
+                              }`
+                            }}>
+                              <div className="card-body p-3">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <div className="d-flex align-items-center">
+                                    <span style={{
+                                      fontSize: '0.8rem', 
+                                      fontWeight: 600, 
+                                      color: '#6b7280',
+                                      backgroundColor: '#f3f4f6',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      marginRight: 8
+                                    }}>
+                                      {vale.codigo || 'G-000'}
+                                    </span>
+                                    <span style={{fontSize: '0.75rem', color: '#9ca3af'}}>
+                                      {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  <Badge 
+                                    bg={vale.estado === 'aprobado' ? 'success' : vale.estado === 'rechazado' ? 'danger' : 'warning'} 
+                                    style={{fontSize: '0.7rem'}}
+                                  >
+                                    {vale.estado === 'aprobado' ? 'OK' : vale.estado === 'rechazado' ? 'NO' : 'Pend.'}
+                                  </Badge>
+                                </div>
+                                
+                                <div style={{fontSize: '0.9rem', fontWeight: 500, color: '#374151', marginBottom: 8}}>
+                                  {vale.concepto}
+                                </div>
+                                
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <span style={{fontSize: '0.75rem', color: '#6b7280'}}>Valor: </span>
+                                    <span style={{fontWeight: 600, color: '#ef4444', fontSize: '1rem'}}>
+                                      ${Number(vale.valor).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {(vale.estado === 'aprobado' || vale.estado === 'rechazado') && vale.aprobadoPor && (
+                                  <div style={{
+                                    fontSize: '0.75rem',
+                                    color: vale.estado === 'aprobado' ? '#16a34a' : '#ef4444',
+                                    marginTop: 6,
+                                    paddingTop: 6,
+                                    borderTop: '1px solid #f3f4f6'
+                                  }}>
+                                    <i className={`bi bi-${vale.estado === 'aprobado' ? 'check' : 'x'}-circle me-1`}></i>
+                                    {vale.aprobadoPor}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

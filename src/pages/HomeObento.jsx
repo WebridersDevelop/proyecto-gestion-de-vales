@@ -181,6 +181,38 @@ function HomeObento() {
         </div>
       </nav>
       <div className="bottom-spacer"></div>
+
+      {/* Versión */}
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          background: '#f8fafc',
+          borderRadius: 12,
+          boxShadow: '0 1px 6px #0001',
+          border: '1.5px solid #e5e7eb',
+          padding: '6px 18px',
+          fontWeight: 700,
+          fontSize: 16,
+          color: '#2563eb',
+          letterSpacing: '0.02em',
+          margin: '8px 0'
+        }}
+      >
+        <i className="bi bi-info-circle" style={{marginRight: 8, color: '#6366f1', fontSize: 18}}></i>
+        <span style={{marginRight: 6}}>Versión</span>
+        <span style={{
+          background: '#e0e7ef',
+          color: '#2563eb',
+          borderRadius: 8,
+          padding: '2px 10px',
+          fontWeight: 800,
+          fontSize: 15,
+          marginLeft: 4
+        }}>
+          v1.1.0
+        </span>
+      </div>
     </>
   );
 }
