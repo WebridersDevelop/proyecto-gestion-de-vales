@@ -29,7 +29,8 @@ function AppContent() {
     ) {
       navigate('/', { replace: true });
     }
-    if (!loading && rol === 'peluquero' &&
+    // Cambia aquí la lógica para los nuevos roles
+    if (!loading && ['barbero', 'estilista', 'estetica'].includes(rol) &&
       !['/', '/vales-servicio', '/vales-gasto'].includes(location.pathname)
     ) {
       navigate('/', { replace: true });
@@ -71,12 +72,12 @@ function AppContent() {
               : <HomeObento />
           } />
           <Route path="/vales-servicio" element={
-            (rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero')
+            (rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol))
               ? <ValesServicio />
               : <HomeObento />
           } />
           <Route path="/vales-gasto" element={
-            (rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero')
+            (rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol))
               ? <ValesGasto />
               : <HomeObento />
           } />
@@ -112,13 +113,13 @@ function AppContent() {
                 <span>Dashboard</span>
               </NavLink>
             )}
-            {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+            {(rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol)) && (
               <NavLink className="bottom-nav-link" to="/vales-servicio">
                 <i className="bi bi-receipt" aria-hidden="true"></i>
                 <span>Vales</span>
               </NavLink>
             )}
-            {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+            {(rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol)) && (
               <NavLink className="bottom-nav-link" to="/vales-gasto">
                 <i className="bi bi-cash-stack" aria-hidden="true"></i>
                 <span>Gastos</span>

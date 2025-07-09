@@ -122,7 +122,10 @@ function ValesGasto() {
     return fechaVale === fechaFiltro;
   });
 
-  if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
+  // Cambia aquí la lógica de acceso para los nuevos roles
+  if (
+    !['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)
+  ) {
     return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
   }
 
@@ -143,7 +146,7 @@ function ValesGasto() {
                   </span>
                 </div>
               )}
-              {(rol === 'peluquero' || rol === 'admin' || rol === 'anfitrion') && (
+              {(['barbero', 'estilista', 'estetica', 'admin', 'anfitrion'].includes(rol)) && (
                 <Form onSubmit={handleSubmit} className="mb-4 p-3" style={{background: "#f9fafb", borderRadius: 12, boxShadow: "0 1px 8px #0001"}}>
                   <Row className="g-3">
                     <Col xs={12} md={7}>

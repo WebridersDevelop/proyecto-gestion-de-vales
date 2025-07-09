@@ -14,8 +14,8 @@ function CuadreDiario() {
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
-  const [vista, setVista] = useState('tabla'); // 'tabla' o 'cards'
-  const [orden, setOrden] = useState('desc'); // 'asc' o 'desc'
+  const [vista, setVista] = useState('tabla');
+  const [orden, setOrden] = useState('desc');
   function getHoyLocal() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -24,6 +24,14 @@ function CuadreDiario() {
   const hoy = getHoyLocal();
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
+
+  // --- FUNCION CORRECTA PARA MONTO PERCIBIDO ---
+  function getMontoPercibido(vale) {
+    if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && vale.dividirPorDos) {
+      return Number(vale.valor) / 2;
+    }
+    return Number(vale.valor);
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -37,7 +45,6 @@ function CuadreDiario() {
         const todos = [...valesServicio, ...valesGasto];
         setVales(todos);
 
-        // Saca los usuarios únicos
         const usuariosUnicos = Array.from(
           new Set(todos.map(v => v.peluqueroEmail || 'Desconocido'))
         );
@@ -75,7 +82,6 @@ function CuadreDiario() {
       setLoading(false);
     });
 
-    // Carga todos los usuarios y sus nombres (esto puede quedar con getDocs porque no cambia mucho)
     getDocs(collection(db, 'usuarios')).then(usuariosSnap => {
       const nombres = {};
       usuariosSnap.forEach(docu => {
@@ -96,7 +102,6 @@ function CuadreDiario() {
     setFiltros({ ...filtros, [e.target.name]: e.target.value });
   };
 
-  // Eliminar vale
   const handleEliminar = async (vale) => {
     if (window.confirm('¿Seguro que deseas eliminar este vale?')) {
       await deleteDoc(doc(db, vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto', vale.id));
@@ -104,148 +109,256 @@ function CuadreDiario() {
     }
   };
 
-  function getMontoPercibido(vale) {
-    // Si es ingreso (servicio) y está aprobado y dividirPorDos es true, la mitad; si no, el total
-    if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && vale.dividirPorDos) {
-      return Number(vale.valor) / 2;
-    }
-    return Number(vale.valor);
-  }
-
+  // --- EXPORTAR PDF ---
   const handleExportPDF = () => {
-    const docu = new jsPDF();
-    docu.setFontSize(16);
-    docu.text('Resumen de Vales', 14, 16);
+    const doc = new jsPDF({ orientation: 'landscape' });
 
-    // Resumen general
-    docu.setFontSize(11);
-    docu.text(`Rango: ${desde} a ${hasta}`, 14, 24);
-    docu.text(`Ingresos: $${totalIngresos.toLocaleString()}`, 14, 32);
-    docu.text(`Egresos: $${totalEgresos.toLocaleString()}`, 14, 38);
-    docu.text(`Saldo Neto: $${saldoNeto.toLocaleString()}`, 14, 44);
-    docu.text(`Pendiente: $${totalPendiente.toLocaleString()}`, 14, 50);
-    docu.text(`Monto Percibido: $${totalPercibido.toLocaleString()}`, 14, 56);
+    // 1. Filtra los vales según los filtros actuales
+    const valesFiltradosPDF = vales.filter(v => {
+      if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
+      if (filtros.tipo && v.tipo !== filtros.tipo) return false;
+      if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
+      if (filtros.local && (!v.local || v.local !== filtros.local)) return false;
+      if (filtros.formaPago && v.formaPago !== filtros.formaPago) return false;
+      const fechaValeLocal = new Date(v.fecha.getTime() - v.fecha.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10);
+      if (fechaValeLocal < desde) return false;
+      if (fechaValeLocal > hasta) return false;
+      return true;
+    });
 
-    // Agrupa por usuario
+    // 2. Ordena los vales por usuario y fecha
+    const valesOrdenados = valesFiltradosPDF.sort((a, b) => {
+      const emailA = a.peluqueroEmail || 'Desconocido';
+      const emailB = b.peluqueroEmail || 'Desconocido';
+      if (emailA !== emailB) return emailA.localeCompare(emailB);
+      return a.fecha - b.fecha;
+    });
+
+    // 3. Resumen general
+    const totalIngresos = valesFiltradosPDF
+      .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+      .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
+    const totalEgresos = valesFiltradosPDF
+      .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
+      .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
+    const saldoNeto = totalIngresos - totalEgresos;
+
+    const totalPendiente = valesFiltradosPDF
+      .filter(v => v.estado === 'pendiente')
+      .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
+
+    const totalPercibido = valesFiltradosPDF
+      .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+      .reduce((a, v) => a + getMontoPercibido(v), 0);
+
+    let startY = 20;
+
+    // ENCABEZADO PRINCIPAL - MÁS COMPACTO
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('RESUMEN GENERAL DE VALES', doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 10;
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Período: ${desde} - ${hasta}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 12;
+
+    // RESUMEN GENERAL EN FORMATO TABLA COMPACTA
+    const resumenData = [
+      ['Ingresos', 'Egresos', 'Saldo Neto', 'Pendiente', 'M. Percibido'],
+      [
+        `$${totalIngresos.toLocaleString()}`,
+        `$${totalEgresos.toLocaleString()}`,
+        `$${saldoNeto.toLocaleString()}`,
+        `$${totalPendiente.toLocaleString()}`,
+        `$${totalPercibido.toLocaleString()}`
+      ]
+    ];
+
+    autoTable(doc, {
+      head: [resumenData[0]],
+      body: [resumenData[1]],
+      startY: startY,
+      styles: { 
+        fontSize: 10,
+        cellPadding: 4,
+        halign: 'center',
+        fontStyle: 'bold'
+      },
+      columnStyles: {
+        0: { fillColor: [220, 252, 231], textColor: [22, 163, 74] }, // Verde para ingresos
+        1: { fillColor: [254, 226, 226], textColor: [220, 53, 69] }, // Rojo para egresos
+        2: { fillColor: saldoNeto >= 0 ? [220, 252, 231] : [254, 226, 226], textColor: saldoNeto >= 0 ? [22, 163, 74] : [220, 53, 69] }, // Verde/Rojo según saldo
+        3: { fillColor: [255, 237, 213], textColor: [245, 158, 66] }, // Naranja para pendiente
+        4: { fillColor: [224, 231, 255], textColor: [99, 102, 241] } // Azul para monto percibido
+      },
+      theme: 'grid',
+      margin: { left: 50, right: 50 },
+      headStyles: { fillColor: [52, 73, 94], textColor: 255, fontSize: 9, fontStyle: 'bold' }
+    });
+
+    startY = doc.lastAutoTable.finalY + 15;
+
+    // 4. TABLA ÚNICA CON TODOS LOS VALES
+    const rows = [];
+    let currentUser = '';
+    
+    valesOrdenados.forEach(v => {
+      const email = v.peluqueroEmail || 'Desconocido';
+      const nombre = v.peluqueroNombre || nombresUsuarios[email] || email;
+      
+      // Si es un usuario diferente, agrega una fila separadora
+      if (currentUser !== email) {
+        if (currentUser !== '') {
+          // Fila separadora visual
+          rows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
+        }
+        currentUser = email;
+      }
+      
+      rows.push([
+        nombre.length > 15 ? nombre.substring(0, 15) + '...' : nombre,
+        v.fecha.toLocaleDateString(),
+        v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        v.tipo,
+        v.servicio || v.concepto || '-',
+        v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
+        v.local || '-',
+        Number(v.valor).toLocaleString(),
+        getMontoPercibido(v).toLocaleString(),
+                v.estado || 'pendiente',
+        v.aprobadoPor || '-',
+        v.observacion || '-'
+      ]);
+    });
+
+    // Dibuja la tabla única
+    autoTable(doc, {
+      head: [[
+        'Usuario', 'Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'F. Pago', 'Local',
+        'Valor', 'M. Percibido', 'Estado', 'Aprobado por', 'Observación'
+      ]],
+      body: rows,
+      startY: startY,
+      styles: {
+        fontSize: 7,
+        cellPadding: 1.5,
+        overflow: 'linebreak',
+        cellWidth: 'wrap',
+        valign: 'middle'
+      },
+      columnStyles: {
+        0: { cellWidth: 25, fontStyle: 'bold' }, // Usuario
+        1: { cellWidth: 18 }, // Fecha
+        2: { cellWidth: 12 }, // Hora
+        3: { cellWidth: 15 }, // Tipo
+        4: { cellWidth: 30 }, // Servicio/Concepto
+        5: { cellWidth: 18 }, // Forma de Pago
+        6: { cellWidth: 20 }, // Local
+        7: { cellWidth: 18, halign: 'right' }, // Valor
+        8: { cellWidth: 20, halign: 'right' }, // Monto Percibido
+        9: { cellWidth: 18 }, // Estado
+        10: { cellWidth: 25 }, // Aprobado por
+        11: { cellWidth: 30 }, // Observación
+      },
+      theme: 'striped',
+      margin: { left: 14, right: 14 },
+      headStyles: { 
+        fillColor: [99, 102, 241], 
+        textColor: 255, 
+        fontSize: 8, 
+        fontStyle: 'bold' 
+      },
+      didDrawCell: function(data) {
+        // Colorea las filas según el tipo
+        if (data.section === 'body' && data.column.index === 3) {
+          const tipo = data.cell.text[0];
+          if (tipo === 'Ingreso') {
+            doc.setFillColor(220, 252, 231); // Verde claro
+          } else if (tipo === 'Egreso') {
+            doc.setFillColor(254, 226, 226); // Rojo claro
+          }
+        }
+      }
+    });
+
+    // 5. RESUMEN POR USUARIO AL FINAL
     const agrupadosPorUsuario = {};
-    valesFiltrados.forEach(v => {
+    valesFiltradosPDF.forEach(v => {
       const email = v.peluqueroEmail || 'Desconocido';
       if (!agrupadosPorUsuario[email]) agrupadosPorUsuario[email] = [];
       agrupadosPorUsuario[email].push(v);
     });
 
-    let startY = 62;
-    Object.keys(agrupadosPorUsuario).forEach(email => {
-      const lista = agrupadosPorUsuario[email].sort((a, b) => a.fecha - b.fecha);
+    startY = doc.lastAutoTable.finalY + 15;
+
+    if (startY + 30 > doc.internal.pageSize.getHeight() - 20) {
+      doc.addPage();
+      startY = 20;
+    }
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('RESUMEN POR USUARIO', doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 10;
+
+    const resumenUsuarios = Object.keys(agrupadosPorUsuario).map(email => {
+      const lista = agrupadosPorUsuario[email];
       const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || email;
-
-      // Título de usuario
-      docu.setFontSize(12);
-      docu.text(`${nombre} (${email})`, 14, startY);
-      startY += 6;
-
-      // Tabla de vales del usuario
-      const rows = [];
-      lista.forEach(v => {
-        rows.push([
-          v.codigo || '-',
-          v.fecha.toLocaleDateString(),
-          v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          v.tipo,
-          v.servicio || v.concepto || '-',
-          v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
-          v.local || '-',
-          Number(v.valor).toLocaleString(),
-          getMontoPercibido(v).toLocaleString(),
-          v.estado || 'pendiente',
-          v.aprobadoPor || '-',
-          v.observacion || '-'
-        ]);
-      });
-
-      autoTable(docu, {
-        head: [[
-          'Código', 'Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'Forma de Pago', 'Local',
-          'Valor', 'Monto Percibido', 'Estado', 'Aprobado por', 'Observación'
-        ]],
-        body: rows,
-        startY,
-        styles: { fontSize: 9 },
-        theme: 'grid',
-        margin: { left: 14, right: 14 },
-        didDrawPage: (data) => {
-          startY = data.cursor.y + 10;
-        }
-      });
-
-      // Totales por usuario
+      
       const totalIngresosU = lista
         .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
         .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
       const totalEgresosU = lista
         .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
         .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
       const saldoU = totalIngresosU - totalEgresosU;
-      const totalPendienteU = lista
-        .filter(v => v.estado === 'pendiente')
-        .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
+
       const totalPercibidoU = lista
         .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
         .reduce((a, v) => a + getMontoPercibido(v), 0);
 
-      docu.setFontSize(10);
-      docu.text(
-        `Ingresos: $${totalIngresosU.toLocaleString()}   Egresos: $${totalEgresosU.toLocaleString()}   Saldo: $${saldoU.toLocaleString()}   Pendiente: $${totalPendienteU.toLocaleString()}   Monto Percibido: $${totalPercibidoU.toLocaleString()}`,
-        14,
-        startY
-      );
-      startY += 10;
-      if (startY > 260) {
-        docu.addPage();
-        startY = 20;
-      }
+      return [
+        nombre,
+        `$${totalIngresosU.toLocaleString()}`,
+        `$${totalEgresosU.toLocaleString()}`,
+        `$${saldoU.toLocaleString()}`,
+        `$${totalPercibidoU.toLocaleString()}`
+      ];
     });
 
-    // Resumen por local
-    const resumenLocales = {};
-    valesFiltrados.forEach(v => {
-      const local = v.local || 'Sin Local';
-      if (!resumenLocales[local]) resumenLocales[local] = { ingresos: 0, egresos: 0, percibido: 0 };
-      if (v.tipo === 'Ingreso' && v.estado === 'aprobado') {
-        resumenLocales[local].ingresos += Number(v.valor) || 0;
-        resumenLocales[local].percibido += getMontoPercibido(v) || 0;
-      }
-      if (v.tipo === 'Egreso' && v.estado === 'aprobado') {
-        resumenLocales[local].egresos += Number(v.valor) || 0;
-      }
-    });
-
-    startY += 10;
-    docu.setFontSize(13);
-    docu.text('Resumen por Local', 14, startY);
-    startY += 6;
-
-    const rowsLocales = Object.keys(resumenLocales).map(local => [
-      local,
-      `$${resumenLocales[local].ingresos.toLocaleString()}`,
-      `$${resumenLocales[local].egresos.toLocaleString()}`,
-      `$${(resumenLocales[local].ingresos - resumenLocales[local].egresos).toLocaleString()}`,
-      `$${resumenLocales[local].percibido.toLocaleString()}`
-    ]);
-
-    autoTable(docu, {
-      head: [['Local', 'Ingresos', 'Egresos', 'Saldo', 'Monto Percibido']],
-      body: rowsLocales,
-      startY,
-      styles: { fontSize: 10 },
+    autoTable(doc, {
+      head: [['Usuario', 'Ingresos', 'Egresos', 'Saldo', 'Monto Percibido']],
+      body: resumenUsuarios,
+      startY: startY,
+      styles: { 
+        fontSize: 10,
+        cellPadding: 3,
+        halign: 'center'
+      },
+      columnStyles: {
+        0: { halign: 'left', fontStyle: 'bold' },
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+        3: { halign: 'right', fontStyle: 'bold' },
+        4: { halign: 'right' }
+      },
       theme: 'grid',
-      margin: { left: 14, right: 14 }
+      margin: { left: 60, right: 60 },
+      headStyles: { fillColor: [52, 73, 94], textColor: 255, fontStyle: 'bold' }
     });
 
-    docu.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
+    doc.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
   };
 
-  // Filtrado por rango de fechas (incluye ambos extremos)
+  // --- FILTRADO Y RESUMENES PARA LA VISTA ---
   const valesFiltrados = vales.filter(v => {
     if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
     if (filtros.tipo && v.tipo !== filtros.tipo) return false;
@@ -253,7 +366,7 @@ function CuadreDiario() {
     if (filtros.local) {
       if (!v.local || v.local !== filtros.local) return false;
     }
-    if (filtros.formaPago && v.formaPago !== filtros.formaPago) return false; // <-- agrega esto
+    if (filtros.formaPago && v.formaPago !== filtros.formaPago) return false;
     const fechaValeLocal = new Date(v.fecha.getTime() - v.fecha.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
@@ -262,7 +375,6 @@ function CuadreDiario() {
     return true;
   });
 
-  // Resumen contable (solo vales aprobados)
   const totalIngresos = valesFiltrados
     .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
@@ -273,12 +385,10 @@ function CuadreDiario() {
 
   const saldoNeto = totalIngresos - totalEgresos;
 
-  // Total pendiente (solo pendientes)
   const totalPendiente = valesFiltrados
     .filter(v => v.estado === 'pendiente')
     .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
 
-  // Agrupa por usuario
   const agrupados = {};
   valesFiltrados.forEach(vale => {
     const email = vale.peluqueroEmail || 'Desconocido';
@@ -286,7 +396,6 @@ function CuadreDiario() {
     agrupados[email].push(vale);
   });
 
-  // Total monto percibido (solo ingresos aprobados)
   const totalPercibido = valesFiltrados
     .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
     .reduce((a, v) => a + getMontoPercibido(v), 0);

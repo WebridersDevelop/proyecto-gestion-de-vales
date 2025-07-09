@@ -36,6 +36,9 @@ function HomeObento() {
   const { rol, logout } = useAuth();
   const navigate = useNavigate();
 
+  // Define los roles que pueden ver vales y gastos
+  const rolesValesYGastos = ['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'];
+
   const botones = [
     ...(rol === 'admin' ? [{
       icon: 'bi-speedometer2',
@@ -43,13 +46,13 @@ function HomeObento() {
       to: '/dashboard',
       style: buttonStyles.dashboard
     }] : []),
-    ...(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero' ? [{
+    ...(rolesValesYGastos.includes(rol) ? [{
       icon: 'bi-receipt',
       label: 'Vales',
       to: '/vales-servicio',
       style: buttonStyles.vales
     }] : []),
-    ...(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero' ? [{
+    ...(rolesValesYGastos.includes(rol) ? [{
       icon: 'bi-cash-stack',
       label: 'Gastos',
       to: '/vales-gasto',
@@ -132,13 +135,13 @@ function HomeObento() {
               <span>Dashboard</span>
             </NavLink>
           )}
-          {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+          {rolesValesYGastos.includes(rol) && (
             <NavLink className="bottom-nav-link" to="/vales-servicio">
               <i className="bi bi-receipt" aria-hidden="true"></i>
               <span>Vales</span>
             </NavLink>
           )}
-          {(rol === 'admin' || rol === 'anfitrion' || rol === 'peluquero') && (
+          {rolesValesYGastos.includes(rol) && (
             <NavLink className="bottom-nav-link" to="/vales-gasto">
               <i className="bi bi-cash-stack" aria-hidden="true"></i>
               <span>Gastos</span>

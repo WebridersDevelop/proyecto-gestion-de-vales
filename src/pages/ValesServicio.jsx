@@ -50,10 +50,9 @@ function ValesServicio() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Usuario actual:", user); // <-- Aquí sí funciona
-    if (loading) return; // <--- Evita doble submit por si acaso
+    if (loading) return;
 
-    setLoading(true); // <--- Activa loading lo antes posible
+    setLoading(true);
     setMensaje('');
 
     if (!servicio.trim() || !valor) {
@@ -106,7 +105,6 @@ function ValesServicio() {
       if (valorRef.current) valorRef.current.blur();
 
       setMensaje('¡Vale enviado correctamente!');
-      // Mantén el botón deshabilitado mientras se muestra el mensaje
       setTimeout(() => {
         setMensaje('');
         setLoading(false);
@@ -120,7 +118,6 @@ function ValesServicio() {
   };
 
   const valesFiltrados = valesUsuario.filter(vale => {
-    // Convierte ambas fechas a local y compara solo el año-mes-día
     const fechaValeLocal = new Date(vale.fecha.getTime() - vale.fecha.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
@@ -138,7 +135,10 @@ function ValesServicio() {
     return null;
   }
 
-  if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
+  // Cambia aquí la lógica de acceso para los nuevos roles
+  if (
+    !['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)
+  ) {
     return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
   }
 
@@ -159,7 +159,7 @@ function ValesServicio() {
                   </span>
                 </div>
               )}
-              {(rol === 'peluquero' || rol === 'admin' || rol === 'anfitrion') && (
+              {(['barbero', 'estilista', 'estetica', 'admin', 'anfitrion'].includes(rol)) && (
                 <Form onSubmit={handleSubmit} className="mb-4 p-3" style={{background: "#f9fafb", borderRadius: 12, boxShadow: "0 1px 8px #0001"}}>
                   <Row className="g-3">
                     <Col xs={12} md={7}>
@@ -238,7 +238,7 @@ function ValesServicio() {
                     <Table striped bordered hover size="sm" responsive="md" className="mb-0" style={{borderRadius: 12, overflow: 'hidden'}}>
                       <thead style={{background: "#f3f4f6"}}>
                         <tr>
-                          <th>Código</th> {/* NUEVA COLUMNA */}
+                          <th>Código</th>
                           <th>Fecha</th>
                           <th>Hora</th>
                           <th>Servicio</th>
@@ -256,7 +256,7 @@ function ValesServicio() {
                         ) : (
                           valesFiltrados.map(vale => (
                             <tr key={vale.id}>
-                              <td>{vale.codigo || '-'}</td> {/* Muestra el código */}
+                              <td>{vale.codigo || '-'}</td>
                               <td>{vale.fecha.toLocaleDateString()}</td>
                               <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                               <td>{vale.servicio}</td>
@@ -319,8 +319,6 @@ function getHoyLocal() {
   return d.toISOString().slice(0, 10);
 }
 
-export default ValesServicio;
-
 /* 
   Reglas de seguridad de Firestore para la colección 'vales_servicio':
 
@@ -329,3 +327,5 @@ export default ValesServicio;
   - Permite a los usuarios autenticados leer y escribir en la colección.
   - Los usuarios no autenticados no podrán acceder a esta colección.
 */
+
+export default ValesServicio;

@@ -8,7 +8,7 @@ function CrearUsuario() {
   const { rol } = useAuth();
   const [email, setEmail] = useState('');
   const [uid, setUid] = useState('');
-  const [rolUsuario, setRolUsuario] = useState('peluquero');
+  const [rolUsuario, setRolUsuario] = useState('barbero'); // Valor inicial corregido
   const [nombre, setNombre] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ function CrearUsuario() {
       setMensaje('¡Usuario creado correctamente!');
       setEmail('');
       setUid('');
-      setRolUsuario('peluquero');
+      setRolUsuario('barbero'); // Valor de reseteo corregido
       setNombre('');
     } catch (err) {
       setMensaje('Error al crear usuario');
@@ -85,7 +85,9 @@ function CrearUsuario() {
               <Form.Group className="mb-4" controlId="rolUsuario">
                 <Form.Label>Rol</Form.Label>
                 <Form.Select value={rolUsuario} onChange={e => setRolUsuario(e.target.value)}>
-                  <option value="peluquero">Peluquero</option>
+                  <option value="barbero">Barbero</option>
+                  <option value="estilista">Estilista</option>
+                  <option value="estetica">Estética</option>
                   <option value="anfitrion">Anfitrión</option>
                   <option value="admin">Administrador</option>
                 </Form.Select>
