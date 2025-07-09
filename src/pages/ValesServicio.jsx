@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 
@@ -74,7 +74,21 @@ function ValesServicio() {
         nombre = usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : 'Sin nombre';
       }
 
-      await addDoc(collection(db, 'vales_servicio'), {
+      const hoyLocal = getHoyLocal();
+      const valesRef = collection(db, 'vales_servicio');
+      const valesHoySnapshot = await getDocs(valesRef);
+      const valesHoy = valesHoySnapshot.docs.filter(docu => {
+        const data = docu.data();
+        if (!data.fecha) return false;
+        const fechaVale = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
+        const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 10);
+        return fechaValeLocal === hoyLocal;
+      });
+      const codigoServicio = `S-${String(valesHoy.length + 1).padStart(3, '0')}`;
+
+      await addDoc(valesRef, {
         servicio: servicio.trim(),
         valor: Number(valor),
         peluqueroUid: user.uid,
@@ -82,7 +96,8 @@ function ValesServicio() {
         peluqueroNombre: nombre,
         estado: 'pendiente',
         aprobadoPor: '',
-        fecha: Timestamp.now()
+        fecha: Timestamp.now(),
+        codigo: codigoServicio // <--- aquí guardas el código con prefijo S-
       });
 
       setServicio('');
@@ -111,6 +126,17 @@ function ValesServicio() {
       .slice(0, 10);
     return fechaValeLocal === fechaFiltro;
   });
+
+  // Función para calcular la ganancia real
+  function getGanancia(vale) {
+    if (vale.estado === 'aprobado') {
+      if (vale.dividirPorDos) {
+        return Number(vale.valor) / 2;
+      }
+      return Number(vale.valor);
+    }
+    return null;
+  }
 
   if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
     return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
@@ -202,9 +228,9 @@ function ValesServicio() {
                         textAlign: "right"
                       }}
                     >
-                      Acumulado del día (aprobados): ${valesFiltrados
+                      Acumulado del día (ganancia real, aprobados): ${valesFiltrados
                         .filter(v => v.estado === 'aprobado')
-                        .reduce((acc, v) => acc + (Number(v.valor) || 0), 0)
+                        .reduce((acc, v) => acc + (getGanancia(v) || 0), 0)
                         .toLocaleString()}
                     </div>
                   )}
@@ -212,10 +238,12 @@ function ValesServicio() {
                     <Table striped bordered hover size="sm" responsive="md" className="mb-0" style={{borderRadius: 12, overflow: 'hidden'}}>
                       <thead style={{background: "#f3f4f6"}}>
                         <tr>
+                          <th>Código</th> {/* NUEVA COLUMNA */}
                           <th>Fecha</th>
                           <th>Hora</th>
                           <th>Servicio</th>
                           <th>Valor</th>
+                          <th>Ganancia</th>
                           <th>Estado</th>
                           <th>Aprobado por</th>
                         </tr>
@@ -223,15 +251,22 @@ function ValesServicio() {
                       <tbody>
                         {valesFiltrados.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="text-center text-muted">No tienes vales enviados para esta fecha.</td>
+                            <td colSpan={8} className="text-center text-muted">No tienes vales enviados para esta fecha.</td>
                           </tr>
                         ) : (
                           valesFiltrados.map(vale => (
                             <tr key={vale.id}>
+                              <td>{vale.codigo || '-'}</td> {/* Muestra el código */}
                               <td>{vale.fecha.toLocaleDateString()}</td>
                               <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                               <td>{vale.servicio}</td>
                               <td style={{fontWeight:600, color:'#2563eb'}}>${Number(vale.valor).toLocaleString()}</td>
+                              <td style={{fontWeight:600, color:'#6366f1'}}>
+                                {vale.estado === 'aprobado'
+                                  ? `$${getGanancia(vale).toLocaleString()}`
+                                  : <span className="text-muted">-</span>
+                                }
+                              </td>
                               <td>
                                 <Badge bg={
                                   vale.estado === 'aprobado'

@@ -19,6 +19,7 @@ function AprobarValesServicio() {
   const [observacion, setObservacion] = useState('');
   const [formaPago, setFormaPago] = useState('');
   const [local, setLocal] = useState('');
+  const [dividirPorDos, setDividirPorDos] = useState('no');
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
@@ -76,6 +77,7 @@ function AprobarValesServicio() {
     setObservacion('');
     setFormaPago('');
     setLocal('');
+    setDividirPorDos('no'); // reset selector
     setShowModal(true);
   };
 
@@ -95,7 +97,10 @@ function AprobarValesServicio() {
         aprobadoPor: user.email,
         observacion: observacion || '',
         local,
-        ...(accionModal === 'aprobar' ? { formaPago } : {})
+        ...(accionModal === 'aprobar' ? {
+          formaPago,
+          ...(valeActual.tipo === 'servicio' ? { dividirPorDos: dividirPorDos === 'si' } : {})
+        } : {})
       });
       setMensaje(accionModal === 'aprobar' ? 'Vale aprobado' : 'Vale rechazado');
       setShowModal(false);
@@ -137,19 +142,33 @@ function AprobarValesServicio() {
             </Form.Group>
           )}
           {accionModal === 'aprobar' && (
-            <Form.Group className="mb-3">
-              <Form.Label>Forma de Pago <span style={{color:'red'}}>*</span></Form.Label>
-              <Form.Select
-                value={formaPago}
-                onChange={e => setFormaPago(e.target.value)}
-                required
-              >
-                <option value="">Selecciona una opción</option>
-                <option value="efectivo">Efectivo</option>
-                <option value="debito">Débito</option>
-                <option value="transferencia">Transferencia</option>
-              </Form.Select>
-            </Form.Group>
+            <>
+              <Form.Group className="mb-3">
+                <Form.Label>Forma de Pago <span style={{color:'red'}}>*</span></Form.Label>
+                <Form.Select
+                  value={formaPago}
+                  onChange={e => setFormaPago(e.target.value)}
+                  required
+                >
+                  <option value="">Selecciona una opción</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="debito">Débito</option>
+                  <option value="transferencia">Transferencia</option>
+                </Form.Select>
+              </Form.Group>
+              {valeActual?.tipo === 'servicio' && (
+                <Form.Group className="mb-3">
+                  <Form.Label>¿Dividir monto entre 2 para el profesional?</Form.Label>
+                  <Form.Select
+                    value={dividirPorDos}
+                    onChange={e => setDividirPorDos(e.target.value)}
+                  >
+                    <option value="no">No, entregar el monto completo</option>
+                    <option value="si">Sí, dividir el monto en dos</option>
+                  </Form.Select>
+                </Form.Group>
+              )}
+            </>
           )}
           <Form.Group>
             <Form.Label>Observación (opcional)</Form.Label>

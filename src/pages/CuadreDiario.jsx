@@ -10,12 +10,12 @@ function CuadreDiario() {
   const [vales, setVales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '', local: '' });
+  const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '', local: '', formaPago: '' });
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
   const [vista, setVista] = useState('tabla'); // 'tabla' o 'cards'
-  // Ambos selectores de fecha, ambos por defecto el día actual
+  const [orden, setOrden] = useState('desc'); // 'asc' o 'desc'
   function getHoyLocal() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -104,82 +104,156 @@ function CuadreDiario() {
     }
   };
 
+  function getMontoPercibido(vale) {
+    // Si es ingreso (servicio) y está aprobado y dividirPorDos es true, la mitad; si no, el total
+    if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && vale.dividirPorDos) {
+      return Number(vale.valor) / 2;
+    }
+    return Number(vale.valor);
+  }
+
   const handleExportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Resumen de Vales', 14, 16);
+    const docu = new jsPDF();
+    docu.setFontSize(16);
+    docu.text('Resumen de Vales', 14, 16);
 
     // Resumen general
-    doc.setFontSize(11);
-    doc.text(`Rango: ${desde} a ${hasta}`, 14, 24);
-    doc.text(`Ingresos: $${totalIngresos.toLocaleString()}`, 14, 32);
-    doc.text(`Egresos: $${totalEgresos.toLocaleString()}`, 14, 38);
-    doc.text(`Saldo Neto: $${saldoNeto.toLocaleString()}`, 14, 44);
-    doc.text(`Pendiente: $${totalPendiente.toLocaleString()}`, 14, 50);
+    docu.setFontSize(11);
+    docu.text(`Rango: ${desde} a ${hasta}`, 14, 24);
+    docu.text(`Ingresos: $${totalIngresos.toLocaleString()}`, 14, 32);
+    docu.text(`Egresos: $${totalEgresos.toLocaleString()}`, 14, 38);
+    docu.text(`Saldo Neto: $${saldoNeto.toLocaleString()}`, 14, 44);
+    docu.text(`Pendiente: $${totalPendiente.toLocaleString()}`, 14, 50);
+    docu.text(`Monto Percibido: $${totalPercibido.toLocaleString()}`, 14, 56);
 
-    // Tabla de vales
-    const rows = [];
+    // Agrupa por usuario
+    const agrupadosPorUsuario = {};
     valesFiltrados.forEach(v => {
-      rows.push([
-        v.fecha.toLocaleDateString(),
-        v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        v.tipo,
-        v.servicio || v.concepto || '-',
-        v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
-        Number(v.valor).toLocaleString(),
-        v.estado || 'pendiente',
-        v.aprobadoPor || '-',
-        v.peluqueroNombre || '-'
-      ]);
+      const email = v.peluqueroEmail || 'Desconocido';
+      if (!agrupadosPorUsuario[email]) agrupadosPorUsuario[email] = [];
+      agrupadosPorUsuario[email].push(v);
     });
 
-    autoTable(doc, {
-      head: [['Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'Forma de Pago', 'Valor', 'Estado', 'Aprobado por', 'Usuario']],
-      body: rows,
-      startY: 56,
-      styles: { fontSize: 9 },
-      didParseCell: function (data) {
-        // Colorea tipo
-        if (data.section === 'body' && data.column.index === 2) {
-          if (data.cell.raw === 'Ingreso') {
-            data.cell.styles.textColor = [34, 197, 94]; // verde
-          }
-          if (data.cell.raw === 'Egreso') {
-            data.cell.styles.textColor = [220, 53, 69]; // rojo
-          }
+    let startY = 62;
+    Object.keys(agrupadosPorUsuario).forEach(email => {
+      const lista = agrupadosPorUsuario[email].sort((a, b) => a.fecha - b.fecha);
+      const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || email;
+
+      // Título de usuario
+      docu.setFontSize(12);
+      docu.text(`${nombre} (${email})`, 14, startY);
+      startY += 6;
+
+      // Tabla de vales del usuario
+      const rows = [];
+      lista.forEach(v => {
+        rows.push([
+          v.codigo || '-',
+          v.fecha.toLocaleDateString(),
+          v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          v.tipo,
+          v.servicio || v.concepto || '-',
+          v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
+          v.local || '-',
+          Number(v.valor).toLocaleString(),
+          getMontoPercibido(v).toLocaleString(),
+          v.estado || 'pendiente',
+          v.aprobadoPor || '-',
+          v.observacion || '-'
+        ]);
+      });
+
+      autoTable(docu, {
+        head: [[
+          'Código', 'Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'Forma de Pago', 'Local',
+          'Valor', 'Monto Percibido', 'Estado', 'Aprobado por', 'Observación'
+        ]],
+        body: rows,
+        startY,
+        styles: { fontSize: 9 },
+        theme: 'grid',
+        margin: { left: 14, right: 14 },
+        didDrawPage: (data) => {
+          startY = data.cursor.y + 10;
         }
-        // Colorea estado
-        if (data.section === 'body' && data.column.index === 6) {
-          if (data.cell.raw === 'aprobado' || data.cell.raw === 'Aprobado') {
-            data.cell.styles.textColor = [34, 197, 94];
-          }
-          if (data.cell.raw === 'pendiente' || data.cell.raw === 'Pendiente') {
-            data.cell.styles.textColor = [245, 158, 66];
-          }
-          if (data.cell.raw === 'rechazado' || data.cell.raw === 'Rechazado') {
-            data.cell.styles.textColor = [220, 53, 69];
-          }
-        }
-        // Montos a la derecha
-        if (data.column.index === 5) {
-          data.cell.styles.halign = 'right';
-        }
+      });
+
+      // Totales por usuario
+      const totalIngresosU = lista
+        .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+        .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+      const totalEgresosU = lista
+        .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
+        .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+      const saldoU = totalIngresosU - totalEgresosU;
+      const totalPendienteU = lista
+        .filter(v => v.estado === 'pendiente')
+        .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
+      const totalPercibidoU = lista
+        .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+        .reduce((a, v) => a + getMontoPercibido(v), 0);
+
+      docu.setFontSize(10);
+      docu.text(
+        `Ingresos: $${totalIngresosU.toLocaleString()}   Egresos: $${totalEgresosU.toLocaleString()}   Saldo: $${saldoU.toLocaleString()}   Pendiente: $${totalPendienteU.toLocaleString()}   Monto Percibido: $${totalPercibidoU.toLocaleString()}`,
+        14,
+        startY
+      );
+      startY += 10;
+      if (startY > 260) {
+        docu.addPage();
+        startY = 20;
       }
     });
 
-    doc.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
-  };
+    // Resumen por local
+    const resumenLocales = {};
+    valesFiltrados.forEach(v => {
+      const local = v.local || 'Sin Local';
+      if (!resumenLocales[local]) resumenLocales[local] = { ingresos: 0, egresos: 0, percibido: 0 };
+      if (v.tipo === 'Ingreso' && v.estado === 'aprobado') {
+        resumenLocales[local].ingresos += Number(v.valor) || 0;
+        resumenLocales[local].percibido += getMontoPercibido(v) || 0;
+      }
+      if (v.tipo === 'Egreso' && v.estado === 'aprobado') {
+        resumenLocales[local].egresos += Number(v.valor) || 0;
+      }
+    });
 
-  if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
-  if (error) return <Alert variant="danger">{error}</Alert>;
+    startY += 10;
+    docu.setFontSize(13);
+    docu.text('Resumen por Local', 14, startY);
+    startY += 6;
+
+    const rowsLocales = Object.keys(resumenLocales).map(local => [
+      local,
+      `$${resumenLocales[local].ingresos.toLocaleString()}`,
+      `$${resumenLocales[local].egresos.toLocaleString()}`,
+      `$${(resumenLocales[local].ingresos - resumenLocales[local].egresos).toLocaleString()}`,
+      `$${resumenLocales[local].percibido.toLocaleString()}`
+    ]);
+
+    autoTable(docu, {
+      head: [['Local', 'Ingresos', 'Egresos', 'Saldo', 'Monto Percibido']],
+      body: rowsLocales,
+      startY,
+      styles: { fontSize: 10 },
+      theme: 'grid',
+      margin: { left: 14, right: 14 }
+    });
+
+    docu.save(`resumen_vales_${desde}_a_${hasta}.pdf`);
+  };
 
   // Filtrado por rango de fechas (incluye ambos extremos)
   const valesFiltrados = vales.filter(v => {
     if (filtros.usuario && v.peluqueroEmail !== filtros.usuario) return false;
     if (filtros.tipo && v.tipo !== filtros.tipo) return false;
     if (filtros.estado && (v.estado || 'pendiente') !== filtros.estado) return false;
-    if (filtros.local && v.local !== filtros.local) return false;
-    // Ajusta la fecha a local antes de comparar
+    if (filtros.local) {
+      if (!v.local || v.local !== filtros.local) return false;
+    }
+    if (filtros.formaPago && v.formaPago !== filtros.formaPago) return false; // <-- agrega esto
     const fechaValeLocal = new Date(v.fecha.getTime() - v.fecha.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
@@ -212,10 +286,18 @@ function CuadreDiario() {
     agrupados[email].push(vale);
   });
 
+  // Total monto percibido (solo ingresos aprobados)
+  const totalPercibido = valesFiltrados
+    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+    .reduce((a, v) => a + getMontoPercibido(v), 0);
+
+  if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
+  if (error) return <Alert variant="danger">{error}</Alert>;
+
   return (
     <div className="cuadre-diario-container">
       <Row className="justify-content-center mt-4">
-        <Col xs={12} md={11} lg={10}>
+        <Col xs={12} md={12} lg={12} xl={12} style={{paddingLeft: 8, paddingRight: 8, maxWidth: "100%"}}>
           <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
             <Card.Body>
               <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 26}}>
@@ -264,6 +346,26 @@ function CuadreDiario() {
                         <option value="">Todos</option>
                         <option value="La Tirana">La Tirana</option>
                         <option value="Salvador Allende">Salvador Allende</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6} md={2}>
+                    <Form.Group>
+                      <Form.Label>Forma de Pago</Form.Label>
+                      <Form.Select name="formaPago" value={filtros.formaPago || ''} onChange={handleFiltro}>
+                        <option value="">Todas</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="debito">Débito</option>
+                        <option value="transferencia">Transferencia</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col xs={12} sm={6} md={2}>
+                    <Form.Group>
+                      <Form.Label>Orden</Form.Label>
+                      <Form.Select value={orden} onChange={e => setOrden(e.target.value)}>
+                        <option value="desc">Más recientes primero</option>
+                        <option value="asc">Más antiguos primero</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
@@ -317,6 +419,10 @@ function CuadreDiario() {
                         <div><b>Saldo Pendiente</b></div>
                         <div style={{ color: '#f59e42', fontSize: 20, fontWeight: 600 }}>${totalPendiente.toLocaleString()}</div>
                       </div>
+                      <div>
+                        <div><b>Monto Percibido</b></div>
+                        <div style={{ color: '#6366f1', fontSize: 20, fontWeight: 600 }}>${totalPercibido.toLocaleString()}</div>
+                      </div>
                     </Card.Body>
                   </Card>
                 </Col>
@@ -338,7 +444,10 @@ function CuadreDiario() {
                 <Alert variant="info">No hay vales para mostrar.</Alert>
               ) : (
                 Object.keys(agrupados).map(email => {
-                  const lista = agrupados[email].sort((a, b) => b.fecha - a.fecha);
+                  // ORDENAR LA LISTA SEGÚN EL FILTRO DE ORDEN
+                  const lista = [...agrupados[email]].sort((a, b) =>
+                    orden === 'asc' ? a.fecha - b.fecha : b.fecha - a.fecha
+                  );
                   const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || '';
 
                   const totalIngresosU = lista
@@ -354,6 +463,10 @@ function CuadreDiario() {
                   const totalPendienteU = lista
                     .filter(v => v.estado === 'pendiente')
                     .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
+
+                  const totalPercibidoU = lista
+                    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+                    .reduce((a, v) => a + getMontoPercibido(v), 0);
 
                   return (
                     <div key={email} className="mb-5">
@@ -377,6 +490,10 @@ function CuadreDiario() {
                         {' | '}
                         <span style={{color:'#f59e42', fontWeight:600}}>
                           Pendiente: ${totalPendienteU.toLocaleString()}
+                        </span>
+                        {' | '}
+                        <span style={{color:'#6366f1', fontWeight:600}}>
+                          Monto Percibido: ${totalPercibidoU.toLocaleString()}
                         </span>
                       </div>
                       {vista === 'cards' ? (
@@ -407,6 +524,9 @@ function CuadreDiario() {
                                 <div><b>Forma de Pago:</b> {vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</div>
                                 <div className={`monto ${vale.tipo === 'Ingreso' ? 'ingreso' : 'egreso'}`}>
                                   {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+                                </div>
+                                <div>
+                                  <b>Monto Percibido:</b> <span style={{color:'#6366f1', fontWeight:600}}>${getMontoPercibido(vale).toLocaleString()}</span>
                                 </div>
                                 <div>
                                   <b>Aprobado por:</b>{' '}
@@ -443,44 +563,72 @@ function CuadreDiario() {
                             <div className="text-end mt-2" style={{fontWeight: 'bold', fontSize: 16}}>
                               Saldo: <span style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</span>
                               <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
+                              <span style={{marginLeft: 12, color: '#6366f1'}}>Monto Percibido: ${totalPercibidoU.toLocaleString()}</span>
                             </div>
                           </Col>
                         </Row>
                       ) : (
-                        <div style={{overflowX: 'auto', borderBottom: '2px solid #eee'}}>
-                          <Table striped bordered hover size="sm" responsive="sm" className="mb-0">
+                        <div
+                          className="table-responsive"
+                          style={{
+                            overflowX: 'auto',
+                            width: '100%',
+                            background: "#fff",
+                            padding: 0,
+                            marginLeft: 0,
+                            marginRight: 0,
+                          }}
+                        >
+                          <Table
+                            striped
+                            bordered
+                            hover
+                            size="sm"
+                            className="mb-0"
+                            style={{
+                              fontSize: 14,
+                              minWidth: 1100,
+                              background: "#fff"
+                            }}
+                          >
                             <thead>
                               <tr>
-                                <th>Fecha</th>
-                                <th>Hora</th>
-                                <th>Tipo</th>
-                                <th>Servicio/Concepto</th>
-                                <th>Forma de Pago</th>
-                                <th>Local</th>
-                                <th>Monto</th>
-                                <th>Estado</th>
-                                <th>Aprobado por</th>
-                                <th>Observación</th>
-                                {(rol === 'admin' || rol === 'anfitrion') && <th>Acciones</th>}
+                                <th style={{padding: '4px 6px'}}>Código</th>
+                                <th style={{padding: '4px 6px'}}>Fecha</th>
+                                <th style={{padding: '4px 6px'}}>Hora</th>
+                                <th style={{padding: '4px 6px'}}>Tipo</th>
+                                <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
+                                <th style={{padding: '4px 6px'}}>Forma de Pago</th>
+                                <th style={{padding: '4px 6px'}}>Local</th>
+                                <th style={{padding: '4px 6px'}}>Monto</th>
+                                <th style={{padding: '4px 6px'}}>Monto Percibido</th>
+                                <th style={{padding: '4px 6px'}}>Estado</th>
+                                <th style={{padding: '4px 6px'}}>Aprobado por</th>
+                                <th style={{padding: '4px 6px'}}>Observación</th>
+                                {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
                               </tr>
                             </thead>
                             <tbody>
                               {lista.map(vale => (
                                 <tr key={vale.id}>
-                                  <td>{vale.fecha.toLocaleDateString()}</td>
-                                  <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                  <td>
+                                  <td style={{padding: '4px 6px'}}>{vale.codigo || '-'}</td>
+                                  <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
+                                  <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                  <td style={{padding: '4px 6px'}}>
                                     <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
                                       {vale.tipo}
                                     </span>
                                   </td>
-                                  <td>{vale.servicio || vale.concepto || '-'}</td>
-                                  <td>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                                  <td>{vale.local || '-'}</td>
-                                  <td style={{ color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
+                                  <td style={{padding: '4px 6px'}}>{vale.servicio || vale.concepto || '-'}</td>
+                                  <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                                  <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
+                                  <td style={{padding: '4px 6px', color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', fontWeight: 600 }}>
                                     {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
                                   </td>
-                                  <td>
+                                  <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 600 }}>
+                                    ${getMontoPercibido(vale).toLocaleString()}
+                                  </td>
+                                  <td style={{padding: '4px 6px'}}>
                                     <span className={`badge ${
                                       vale.estado === 'aprobado'
                                         ? 'bg-success'
@@ -495,7 +643,7 @@ function CuadreDiario() {
                                         : 'Pendiente'}
                                     </span>
                                   </td>
-                                  <td>
+                                  <td style={{padding: '4px 6px'}}>
                                     {vale.estado === 'aprobado' && vale.aprobadoPor ? (
                                       <span style={{ color: '#22c55e', fontWeight: 600 }}>
                                         <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
@@ -510,9 +658,9 @@ function CuadreDiario() {
                                       <span className="text-secondary">-</span>
                                     )}
                                   </td>
-                                  <td>{vale.observacion || '-'}</td>
+                                  <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
                                   {(rol === 'admin' || rol === 'anfitrion') && (
-                                    <td>
+                                    <td style={{padding: '4px 6px'}}>
                                       <Button
                                         variant="danger"
                                         size="sm"
@@ -526,9 +674,10 @@ function CuadreDiario() {
                               ))}
                               <tr>
                                 <td colSpan={7} className="text-end"><b>Saldo</b></td>
-                                <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 3 : 2}>
+                                <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 4 : 3}>
                                   <b style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</b>
                                   <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
+                                  <span style={{marginLeft: 12, color: '#6366f1'}}>Monto Percibido: ${totalPercibidoU.toLocaleString()}</span>
                                 </td>
                               </tr>
                             </tbody>

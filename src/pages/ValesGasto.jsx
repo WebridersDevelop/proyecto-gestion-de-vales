@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 
@@ -50,8 +50,8 @@ function ValesGasto() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (loading) return; // Previene doble submit
-    setLoading(true);    // Deshabilita el botón inmediatamente
+    if (loading) return;
+    setLoading(true);
     setMensaje('');
     if (!concepto.trim() || !valor) {
       setMensaje('Completa todos los campos');
@@ -70,7 +70,22 @@ function ValesGasto() {
         nombre = usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : 'Sin nombre';
       }
 
-      await addDoc(collection(db, 'vales_gasto'), {
+      // --- CÓDIGO CORRELATIVO DIARIO CON PREFIJO G- ---
+      const hoyLocal = getHoyLocal();
+      const valesRef = collection(db, 'vales_gasto');
+      const snapshot = await getDocs(valesRef);
+      const valesHoy = snapshot.docs.filter(docu => {
+        const data = docu.data();
+        if (!data.fecha) return false;
+        const fechaVale = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
+        const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 10);
+        return fechaValeLocal === hoyLocal;
+      });
+      const codigoVale = `G-${String(valesHoy.length + 1).padStart(3, '0')}`;
+
+      await addDoc(valesRef, {
         concepto: concepto.trim(),
         valor: Number(valor),
         peluqueroUid: user.uid,
@@ -78,7 +93,8 @@ function ValesGasto() {
         peluqueroNombre: nombre,
         estado: 'pendiente',
         aprobadoPor: '',
-        fecha: Timestamp.now()
+        fecha: Timestamp.now(),
+        codigo: codigoVale // <--- aquí guardas el código
       });
 
       setConcepto('');
@@ -102,11 +118,8 @@ function ValesGasto() {
 
   // Filtro por fecha seleccionada
   const valesFiltrados = valesUsuario.filter(vale => {
-    // Convierte ambas fechas a local y compara solo el año-mes-día
-    const fechaValeLocal = new Date(vale.fecha.getTime() - vale.fecha.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-    return fechaValeLocal === fechaFiltro;
+    const fechaVale = vale.fecha.toISOString().slice(0, 10);
+    return fechaVale === fechaFiltro;
   });
 
   if (rol !== 'admin' && rol !== 'anfitrion' && rol !== 'peluquero') {
@@ -210,6 +223,7 @@ function ValesGasto() {
                     <Table striped bordered hover size="sm" responsive="md" className="mb-0" style={{borderRadius: 12, overflow: 'hidden'}}>
                       <thead style={{background: "#f3f4f6"}}>
                         <tr>
+                          <th>Código</th>
                           <th>Fecha</th>
                           <th>Hora</th>
                           <th>Concepto</th>
@@ -221,11 +235,12 @@ function ValesGasto() {
                       <tbody>
                         {valesFiltrados.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="text-center text-muted">No tienes vales de gasto enviados para esta fecha.</td>
+                            <td colSpan={7} className="text-center text-muted">No tienes vales de gasto enviados para esta fecha.</td>
                           </tr>
                         ) : (
                           valesFiltrados.map(vale => (
                             <tr key={vale.id}>
+                              <td>{vale.codigo || '-'}</td>
                               <td>{vale.fecha.toLocaleDateString()}</td>
                               <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                               <td>{vale.concepto}</td>
