@@ -14,7 +14,7 @@ function CuadreDiario() {
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
-  const [vista, setVista] = useState('tabla');
+  const [vista, setVista] = useState('cards'); // <-- Por Profesional es la vista por defecto
   const [ordenColumna, setOrdenColumna] = useState('fecha');
   const [ordenDireccion, setOrdenDireccion] = useState('desc');
   function getHoyLocal() {
@@ -542,193 +542,356 @@ function CuadreDiario() {
                   </Card>
                 </Col>
               </Row>
+              {/* Selector de vista */}
               <div className="mb-3 text-center">
                 <ToggleButtonGroup type="radio" name="vista" value={vista} onChange={setVista}>
-                  <ToggleButton id="vista-tabla" value="tabla" variant="outline-primary" size="sm">
-                    Tabla
+                  <ToggleButton id="vista-cards" value="cards" variant="outline-primary" size="sm">
+                    Por Profesional
                   </ToggleButton>
-                  <ToggleButton id="vista-cards" value="cards" variant="outline-primary" size="sm" disabled>
-                    Tarjetas
+                  <ToggleButton id="vista-tabla" value="tabla" variant="outline-primary" size="sm">
+                    Vista General
                   </ToggleButton>
                 </ToggleButtonGroup>
                 <Button variant="primary" size="sm" className="ms-3" onClick={handleExportPDF}>
                   <i className="bi bi-file-earmark-arrow-down me-1"></i>Descargar PDF
                 </Button>
               </div>
-              {/* --- SOLO UNA TABLA GLOBAL --- */}
-              {valesFiltrados.length === 0 ? (
-                <Alert variant="info">No hay vales para mostrar.</Alert>
-              ) : (
-                <div className="table-responsive" style={{overflowX: 'auto', width: '100%', background: "#fff", padding: 0, marginLeft: 0, marginRight: 0}}>
-                  <Table
-                    striped
-                    bordered
-                    hover
-                    size="sm"
-                    className="mb-0"
-                    style={{
-                      fontSize: 14,
-                      minWidth: 1100,
-                      background: "#fff"
-                    }}
-                  >
-                    <thead>
-  <tr>
-    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('codigo')}>
-      Código {ordenColumna === 'codigo' && (ordenDireccion === 'asc' ? '▲' : '▼')}
-    </th>
-    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('fecha')}>
-      Fecha {ordenColumna === 'fecha' && (ordenDireccion === 'asc' ? '▲' : '▼')}
-    </th>
-    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('hora')}>
-      Hora {ordenColumna === 'hora' && (ordenDireccion === 'asc' ? '▲' : '▼')}
-    </th>
-    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('tipo')}>
-      Tipo {ordenColumna === 'tipo' && (ordenDireccion === 'asc' ? '▲' : '▼')}
-    </th>
-    <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
-    <th style={{padding: '4px 6px'}}>Forma de Pago</th>
-    <th style={{padding: '4px 6px'}}>Local</th>
-    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('valor')}>
-      Monto {ordenColumna === 'valor' && (ordenDireccion === 'asc' ? '▲' : '▼')}
-    </th>
-    <th style={{padding: '4px 6px'}}>Monto Percibido</th>
-    <th style={{padding: '4px 6px'}}>Estado</th>
-    <th style={{padding: '4px 6px'}}>Aprobado por</th>
-    <th style={{padding: '4px 6px'}}>Observación</th>
-    <th style={{padding: '4px 6px'}}>Comisión</th>
-    {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
-  </tr>
-</thead>
-                    <tbody>
-                      {valesFiltrados
-                        .sort((a, b) => {
-                          let valA, valB;
-                          switch (ordenColumna) {
-                            case 'codigo':
-                              valA = a.codigo || '';
-                              valB = b.codigo || '';
-                              break;
-                            case 'fecha':
-                              valA = a.fecha;
-                              valB = b.fecha;
-                              break;
-                            case 'hora':
-                              valA = a.fecha.getHours() * 60 + a.fecha.getMinutes();
-                              valB = b.fecha.getHours() * 60 + b.fecha.getMinutes();
-                              break;
-                            case 'tipo':
-                              valA = a.tipo;
-                              valB = b.tipo;
-                              break;
-                            case 'valor':
-                              valA = Number(a.valor) || 0;
-                              valB = Number(b.valor) || 0;
-                              break;
-                            default:
-                              valA = a[ordenColumna] || '';
-                              valB = b[ordenColumna] || '';
-                          }
-                          if (valA < valB) return ordenDireccion === 'asc' ? -1 : 1;
-                          if (valA > valB) return ordenDireccion === 'asc' ? 1 : -1;
-                          return 0;
-                        })
-                        .map(vale => (
-                          <tr
-                            key={vale.id}
-                            style={{
-                              borderLeft: `6px solid ${
-                                vale.estado === 'aprobado'
+
+              {/* Vista general (tabla global) */}
+              {vista === 'tabla' ? (
+                valesFiltrados.length === 0 ? (
+                  <Alert variant="info">No hay vales para mostrar.</Alert>
+                ) : (
+                  <div className="table-responsive" style={{overflowX: 'auto', width: '100%', background: "#fff", padding: 0, marginLeft: 0, marginRight: 0}}>
+                    <Table
+                      striped
+                      bordered
+                      hover
+                      size="sm"
+                      className="mb-0"
+                      style={{
+                        fontSize: 14,
+                        minWidth: 1100,
+                        background: "#fff"
+                      }}
+                    >
+                      <thead>
+    <tr>
+      <th style={{padding: '4px 6px'}}>Código</th>
+      <th style={{padding: '4px 6px'}}>Profesional</th>
+      <th style={{padding: '4px 6px'}}>Fecha</th>
+      <th style={{padding: '4px 6px'}}>Hora</th>
+      <th style={{padding: '4px 6px'}}>Tipo</th>
+      <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
+      <th style={{padding: '4px 6px'}}>Forma de Pago</th>
+      <th style={{padding: '4px 6px'}}>Local</th>
+      <th style={{padding: '4px 6px'}}>Monto</th>
+      <th style={{padding: '4px 6px'}}>Monto Percibido</th>
+      <th style={{padding: '4px 6px'}}>Estado</th>
+      <th style={{padding: '4px 6px'}}>Aprobado por</th>
+      <th style={{padding: '4px 6px'}}>Observación</th>
+      <th style={{padding: '4px 6px'}}>Comisión</th>
+      {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
+    </tr>
+  </thead>
+                      <tbody>
+                        {valesFiltrados
+                          .sort((a, b) => {
+                            let valA, valB;
+                            switch (ordenColumna) {
+                              case 'codigo':
+                                valA = a.codigo || '';
+                                valB = b.codigo || '';
+                                break;
+                              case 'fecha':
+                                valA = a.fecha;
+                                valB = b.fecha;
+                                break;
+                              case 'hora':
+                                valA = a.fecha.getHours() * 60 + a.fecha.getMinutes();
+                                valB = b.fecha.getHours() * 60 + b.fecha.getMinutes();
+                                break;
+                              case 'tipo':
+                                valA = a.tipo;
+                                valB = b.tipo;
+                                break;
+                              case 'valor':
+                                valA = Number(a.valor) || 0;
+                                valB = Number(b.valor) || 0;
+                                break;
+                              default:
+                                valA = a[ordenColumna] || '';
+                                valB = b[ordenColumna] || '';
+                            }
+                            if (valA < valB) return ordenDireccion === 'asc' ? -1 : 1;
+                            if (valA > valB) return ordenDireccion === 'asc' ? 1 : -1;
+                            return 0;
+                          })
+                          .map(vale => (
+                            <tr
+                              key={vale.id}
+                              style={{
+                                borderLeft: `6px solid ${
+                                  vale.estado === 'aprobado'
                                   ? '#22c55e'
                                   : vale.estado === 'rechazado'
                                   ? '#dc3545'
                                   : '#f59e42'
-                              }`,
-                              background: vale.estado === 'rechazado'
+                                }`,
+                                background: vale.estado === 'rechazado'
                                 ? '#fef2f2'
                                 : vale.estado === 'aprobado'
                                 ? '#f0fdf4'
                                 : '#fffbeb',
-                              fontWeight: 500,
-                              fontSize: 15,
-                            }}
-                          >
-                            <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
-                              {vale.codigo || '-'}
-                            </td>
-                            <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
-                            <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                            <td style={{padding: '4px 6px'}}>
-                              <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
-                                {vale.tipo}
-                              </span>
-                            </td>
-                            <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
-                            <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                            <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
-                            <td style={{
-                              padding: '4px 6px',
-                              color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
-                              fontWeight: 700
-                            }}>
-                              {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
-                            </td>
-                            <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                              {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
-                                ? `$${getMontoPercibido(vale).toLocaleString()}`
-                                : '-'}
-
-                            </td>
-                            <td style={{padding: '4px 6px'}}>
-                              <span className={`badge ${
-                                vale.estado === 'aprobado'
-                                  ? 'bg-success'
-                                  : vale.estado === 'rechazado'
-                                  ? 'bg-danger'
-                                  : 'bg-warning text-dark'
-                              }`}>
-                                {vale.estado === 'aprobado'
+                                fontWeight: 500,
+                                fontSize: 15,
+                              }}
+                            >
+                              <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
+                                {vale.codigo || '-'}
+                              </td>
+                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#2563eb'}}>
+                                {nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || '—'}
+                              </td>
+                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
+                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td style={{padding: '4px 6px'}}>
+                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
+                                  {vale.tipo}
+                                </span>
+                              </td>
+                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
+                              <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                              <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
+                              <td style={{
+                                padding: '4px 6px',
+                                color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
+                                fontWeight: 700
+                              }}>
+                                {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+                              </td>
+                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                                {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
+                                  ? `$${getMontoPercibido(vale).toLocaleString()}`
+                                  : '-'}
+                              </td>
+                              {/* Estado */}
+                              <td>
+                                <span className={`badge ${
+                                  vale.estado === 'aprobado'
+                                    ? 'bg-success'
+                                    : vale.estado === 'rechazado'
+                                    ? 'bg-danger'
+                                    : 'bg-warning text-dark'
+                                }`}>
+                                  {vale.estado === 'aprobado'
                                   ? 'Aprobado'
                                   : vale.estado === 'rechazado'
                                   ? 'Rechazado'
                                   : 'Pendiente'}
-                              </span>
-                            </td>
-                            <td style={{padding: '4px 6px'}}>
-                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#22c55e', fontWeight: 700 }}>
-                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
                                 </span>
-                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#dc3545', fontWeight: 700 }}>
-                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : (
-                                <span className="text-secondary">-</span>
-                              )}
-                            </td>
-                            <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
-                            <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                              {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
-                            </td>
-                            {(rol === 'admin' || rol === 'anfitrion') && (
-                              <td style={{padding: '4px 6px'}}>
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  onClick={() => handleEliminar(vale)}
-                                >
-                                  Eliminar
-                                </Button>
                               </td>
-                            )}
-                          </tr>
-                        ))}
-                    </tbody>
-                  </Table>
-                </div>
+                              <td style={{padding: '4px 6px'}}>
+                                {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#22c55e', fontWeight: 700 }}>
+                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                  <span style={{ color: '#dc3545', fontWeight: 700 }}>
+                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                    {vale.aprobadoPor}
+                                  </span>
+                                ) : (
+                                  <span className="text-secondary">-</span>
+                                )}
+                              </td>
+                              <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
+                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+                              </td>
+                              {(rol === 'admin' || rol === 'anfitrion') && (
+                                <td style={{padding: '4px 6px'}}>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => handleEliminar(vale)}
+                                  >
+                                    Eliminar
+                                  </Button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )
+              ) : (
+                // Vista por profesional: una tabla por profesional
+                <Row>
+                  {Object.entries(agrupados).map(([email, lista]) => {
+                    const nombre = nombresUsuarios[email] || email;
+                    const ingresos = lista.filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado').reduce((a, v) => a + (Number(v.valor) || 0), 0);
+                    const egresos = lista.filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado').reduce((a, v) => a + (Number(v.valor) || 0), 0);
+                    const saldo = ingresos - egresos;
+                    const pendiente = lista.filter(v => v.estado === 'pendiente').reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
+                    const percibido = lista.filter(v => v.estado === 'aprobado').reduce((a, v) => {
+                      if (v.tipo === 'Ingreso') return a + getMontoPercibido(v);
+                      if (v.tipo === 'Egreso') return a - (Number(v.valor) || 0);
+                      return a;
+                    }, 0);
+
+                    return (
+                      <Col xs={12} key={email} className="mb-4">
+                        <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
+                          <Card.Body>
+                            <div style={{fontWeight: 700, fontSize: 18, color: "#2563eb", marginBottom: 8}}>
+                              <i className="bi bi-person-circle me-2"></i>
+                              {nombre}
+                            </div>
+                            <div className="mb-2">
+                              <b>Ingresos:</b> <span style={{color: "#22c55e"}}>${ingresos.toLocaleString()}</span> &nbsp;
+                              <b>Egresos:</b> <span style={{color: "#dc3545"}}>${egresos.toLocaleString()}</span> &nbsp;
+                              <b>Saldo Neto:</b> <span style={{color: saldo >= 0 ? "#22c55e" : "#dc3545"}}>${saldo.toLocaleString()}</span> &nbsp;
+                              <b>Pendiente:</b> <span style={{color: "#f59e0b"}}>${pendiente.toLocaleString()}</span> &nbsp;
+                              <b>Monto Percibido:</b> <span style={{color: "#6366f1"}}>${percibido.toLocaleString()}</span>
+                            </div>
+                            <div style={{overflowX: 'auto'}}>
+                              <Table
+                                striped
+                                bordered
+                                hover
+                                size="sm"
+                                className="mb-0"
+                                style={{fontSize: 14, minWidth: 900, background: "#fff"}}
+                              >
+                <thead>
+  <tr>
+    <th>Código</th>
+    <th>Profesional</th>
+    <th>Fecha</th>
+    <th>Hora</th>
+    <th>Tipo</th>
+    <th>Servicio/Concepto</th>
+    <th>Forma de Pago</th>
+    <th>Local</th>
+    <th>Monto</th>
+    <th>Monto Percibido</th>
+    <th>Estado</th>
+    <th>Aprobado por</th>
+    <th>Observación</th>
+    <th>Comisión</th>
+    {(rol === 'admin' || rol === 'anfitrion') && <th>Acciones</th>}
+  </tr>
+</thead>
+                                <tbody>
+                                  {lista
+    .sort((a, b) => b.fecha - a.fecha)
+    .map(vale => (
+      <tr
+        key={vale.id}
+        style={{
+          borderLeft: `6px solid ${
+            vale.estado === 'aprobado'
+              ? '#22c55e'
+              : vale.estado === 'rechazado'
+              ? '#dc3545'
+              : '#f59e42'
+          }`,
+          background: vale.estado === 'rechazado'
+            ? '#fef2f2'
+            : vale.estado === 'aprobado'
+            ? '#f0fdf4'
+            : '#fffbeb',
+          fontWeight: 500,
+          fontSize: 15,
+        }}
+      >
+        <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
+          {vale.codigo || '-'}
+        </td>
+        <td style={{padding: '4px 6px', fontWeight: 600, color: '#2563eb'}}>
+          {nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || '—'}
+        </td>
+        <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
+        <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        <td style={{padding: '4px 6px'}}>
+          <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
+            {vale.tipo}
+          </span>
+        </td>
+        <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
+        <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+        <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
+        <td style={{
+          padding: '4px 6px',
+          color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
+          fontWeight: 700
+        }}>
+          {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+        </td>
+        <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+          {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
+            ? `$${getMontoPercibido(vale).toLocaleString()}`
+            : '-'}
+        </td>
+        <td style={{padding: '4px 6px'}}>
+          <span className={`badge ${
+            vale.estado === 'aprobado'
+              ? 'bg-success'
+              : vale.estado === 'rechazado'
+              ? 'bg-danger'
+              : 'bg-warning text-dark'
+          }`}>
+            {vale.estado === 'aprobado'
+              ? 'Aprobado'
+              : vale.estado === 'rechazado'
+              ? 'Rechazado'
+              : 'Pendiente'}
+          </span>
+        </td>
+        <td style={{padding: '4px 6px'}}>
+          {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+            <span style={{ color: '#22c55e', fontWeight: 700 }}>
+              <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+              {vale.aprobadoPor}
+            </span>
+          ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+            <span style={{ color: '#dc3545', fontWeight: 700 }}>
+              <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+              {vale.aprobadoPor}
+            </span>
+          ) : (
+            <span className="text-secondary">-</span>
+          )}
+        </td>
+        <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
+        <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+          {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+        </td>
+        {(rol === 'admin' || rol === 'anfitrion') && (
+          <td style={{padding: '4px 6px'}}>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => handleEliminar(vale)}
+            >
+              Eliminar
+            </Button>
+          </td>
+        )}
+      </tr>
+    ))}
+                                </tbody>
+                              </Table>
+                            </div>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    );
+                  })}
+                </Row>
               )}
             </Card.Body>
           </Card>
