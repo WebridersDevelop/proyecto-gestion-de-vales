@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, runTransaction } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 
@@ -11,6 +11,7 @@ function ValesServicio() {
   const [mensaje, setMensaje] = useState('');
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
+  const [valesGastoUsuario, setValesGastoUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
   const servicioRef = useRef(null);
@@ -48,6 +49,25 @@ function ValesServicio() {
     return () => unsub();
   }, [user, mensaje]);
 
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
+      const vales = [];
+      snap.forEach(docu => {
+        const data = docu.data();
+        if (data.peluqueroUid === user.uid) { // <-- CAMBIADO AQUÍ
+          vales.push({
+            ...data,
+            id: docu.id,
+            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+          });
+        }
+      });
+      setValesGastoUsuario(vales);
+    });
+    return () => unsub();
+  }, [user]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
@@ -73,40 +93,25 @@ function ValesServicio() {
         nombre = usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : 'Sin nombre';
       }
 
-      const hoyLocal = getHoyLocal();
-      const valesRef = collection(db, 'vales_servicio');
-      const valesHoySnapshot = await getDocs(valesRef);
-      const valesHoy = valesHoySnapshot.docs.filter(docu => {
-        const data = docu.data();
-        if (!data.fecha) return false;
-        const fechaVale = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
-        const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
-          .toISOString()
-          .slice(0, 10);
-        return fechaValeLocal === hoyLocal;
-      });
-      const codigoServicio = `S-${String(valesHoy.length + 1).padStart(3, '0')}`;
-
-      // --- RESTRICCIÓN DE 1 MINUTO ENTRE ENVIOS ---
-      if (valesHoy.length > 0) {
-        // Busca el último vale enviado por fecha
-        const ultimoVale = valesHoy.reduce((a, b) => {
-          const fechaA = a.data().fecha.toDate ? a.data().fecha.toDate() : new Date(a.data().fecha);
-          const fechaB = b.data().fecha.toDate ? b.data().fecha.toDate() : new Date(b.data().fecha);
-          return fechaA > fechaB ? a : b;
-        });
-        const fechaUltimo = ultimoVale.data().fecha.toDate ? ultimoVale.data().fecha.toDate() : new Date(ultimoVale.data().fecha);
-        const ahora = new Date();
-        const diffMs = ahora - fechaUltimo;
-        if (diffMs < 60000) {
-          setMensaje('Debes esperar al menos 1 minuto antes de enviar otro vale.');
-          setLoading(false);
-          return;
+      // --- CORRELATIVO DIARIO CON TRANSACCIÓN ---
+      const hoy = getHoyLocal(); // "YYYY-MM-DD"
+      const contadorRef = doc(db, 'contadores', `vales_servicio_${hoy}`);
+      let nuevoNumero = 1;
+      await runTransaction(db, async (transaction) => {
+        const contadorDoc = await transaction.get(contadorRef);
+        if (contadorDoc.exists()) {
+          nuevoNumero = Number(contadorDoc.data().numero) + 1;
+          transaction.update(contadorRef, { numero: nuevoNumero });
+        } else {
+          transaction.set(contadorRef, { numero: 1 });
         }
-      }
-      // --- FIN BLOQUE NUEVO ---
+      });
+      const codigoServicio = `S-${String(nuevoNumero).padStart(3, '0')}`;
 
-      await addDoc(valesRef, {
+      const valesRef = collection(db, 'vales_servicio');
+      const docRef = doc(valesRef);
+
+      await setDoc(docRef, {
         servicio: servicio.trim(),
         valor: Number(valor),
         peluqueroUid: user.uid,
@@ -115,7 +120,7 @@ function ValesServicio() {
         estado: 'pendiente',
         aprobadoPor: '',
         fecha: Timestamp.now(),
-        codigo: codigoServicio // <--- aquí guardas el código con prefijo S-
+        codigo: codigoServicio
       });
 
       setServicio('');
@@ -143,25 +148,40 @@ function ValesServicio() {
     return fechaValeLocal === fechaFiltro;
   });
 
+  const gastosFiltrados = valesGastoUsuario.filter(vale => {
+    if (!vale.fecha) return false;
+    // Asegura que la fecha sea un objeto Date
+    const fechaVale = vale.fecha?.toDate ? vale.fecha.toDate() : new Date(vale.fecha);
+    const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    // Acepta 'aprobado' o 'Aprobado' y si no existe el campo, igual lo suma
+    return fechaValeLocal === fechaFiltro && String(vale.estado).toLowerCase() === 'aprobado';
+  });
+  const totalGastosDia = gastosFiltrados.reduce((acc, v) => acc + (Number(v.valor) || 0), 0);
+
+  const acumuladoDia = valesFiltrados
+    .filter(v => v.estado === 'aprobado')
+    .reduce((acc, v) => acc + (getGanancia(v) || 0), 0);
+
+  const acumuladoNeto = acumuladoDia - totalGastosDia;
+
   // Función para calcular la ganancia real
   function getGanancia(vale) {
     if (vale.estado === 'aprobado') {
-      if (vale.dividirPorDos) {
-        return Number(vale.valor) / 2;
-      }
-      return Number(vale.valor);
+      // Suma la comisión extra si existe
+      const base = vale.dividirPorDos ? Number(vale.valor) / 2 : Number(vale.valor);
+      return base + (Number(vale.comisionExtra) || 0);
     }
     return null;
   }
 
-  // Cambia aquí la lógica de acceso para los nuevos roles
   if (
     !['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)
   ) {
     return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
   }
 
-  // Cambia el return principal por este bloque para unificar la estética:
   return (
     <div
       className="container"
@@ -326,58 +346,69 @@ function ValesServicio() {
                     />
                   </Form.Group>
                   {/* Acumulado del día */}
-                  {valesFiltrados.length > 0 && (
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 17,
-                        color: "#2563eb",
-                        marginBottom: 10,
-                        textAlign: "right",
-                        background: "#e0e7ef",
-                        borderRadius: 8,
-                        padding: "6px 14px",
-                        boxShadow: "0 1px 4px #0001",
-                      }}
-                    >
-                      Acumulado del día (ganancia real, aprobados): ${valesFiltrados
-                        .filter(v => v.estado === 'aprobado')
-                        .reduce((acc, v) => acc + (getGanancia(v) || 0), 0)
-                        .toLocaleString()}
+               
+                  {/* Ganancia real, gasto y ganancia neta del día */}
+                  {(acumuladoDia > 0 || totalGastosDia > 0) && (
+                    <div style={{ marginBottom: 10, textAlign: "right" }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          fontSize: 17,
+                          color: "#16a34a",
+                          background: "#f0fdf4",
+                          borderRadius: 8,
+                          padding: "6px 14px",
+                          boxShadow: "0 1px 4px #0001",
+                          marginBottom: 4
+                        }}
+                      >
+                        Ganancia neta del día: ${acumuladoDia.toLocaleString()} - ${totalGastosDia.toLocaleString()} = <b>${acumuladoNeto.toLocaleString()}</b>
+                      </div>
+                      {totalGastosDia > 0 && (
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 15,
+                            color: "#dc3545",
+                            marginTop: 2
+                          }}
+                        >
+                          Gasto del día: -${totalGastosDia.toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* Tabla para pantallas medianas y grandes */}
-                  <div className="d-none d-md-block" style={{ overflowX: 'auto' }}>
+                  <div className="d-none d-md-block" style={{ overflowX: 'auto', width: '100%', background: "#fff", padding: 0 }}>
                     <Table
                       striped
                       bordered
                       hover
                       size="sm"
-                      responsive="md"
                       className="mb-0"
                       style={{
-                        borderRadius: 14,
-                        overflow: 'hidden',
-                        boxShadow: "0 1px 8px #0001",
-                        background: "#f8fafc",
+                        fontSize: 14,
+                        minWidth: 900,
+                        background: "#fff"
                       }}
                     >
-                      <thead style={{ background: "#f3f4f6" }}>
+                      <thead>
                         <tr>
-                          <th>Código</th>
-                          <th>Fecha</th>
-                          <th>Hora</th>
-                          <th>Servicio</th>
-                          <th>Valor</th>
-                          <th>Ganancia</th>
-                          <th>Estado</th>
-                          <th>Aprobado por</th>
+                          <th style={{padding: '4px 6px'}}>Código</th>
+                          <th style={{padding: '4px 6px'}}>Fecha</th>
+                          <th style={{padding: '4px 6px'}}>Hora</th>
+                          <th style={{padding: '4px 6px'}}>Servicio</th>
+                          <th style={{padding: '4px 6px'}}>Valor</th>
+                          <th style={{padding: '4px 6px'}}>Comisión</th>
+                          <th style={{padding: '4px 6px'}}>Ganancia</th>
+                          <th style={{padding: '4px 6px'}}>Estado</th>
+                          <th style={{padding: '4px 6px'}}>Aprobado por</th>
                         </tr>
                       </thead>
                       <tbody>
                         {valesFiltrados.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="text-center text-muted">
+                            <td colSpan={9} className="text-center text-muted">
                               No tienes vales enviados para esta fecha.
                             </td>
                           </tr>
@@ -390,8 +421,8 @@ function ValesServicio() {
                                   vale.estado === 'aprobado'
                                     ? '#22c55e'
                                     : vale.estado === 'rechazado'
-                                    ? '#ef4444'
-                                    : '#f59e0b'
+                                    ? '#dc3545'
+                                    : '#f59e42'
                                 }`,
                                 background: vale.estado === 'rechazado'
                                   ? '#fef2f2'
@@ -402,49 +433,47 @@ function ValesServicio() {
                                 fontSize: 15,
                               }}
                             >
-                              <td style={{ fontWeight: 700, color: '#2563eb', background: '#e0e7ef' }}>
-                                {vale.codigo || 'S-000'}
-                              </td>
-                              <td>{vale.fecha.toLocaleDateString()}</td>
-                              <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td style={{ fontWeight: 600, color: '#374151' }}>{vale.servicio}</td>
-                              <td style={{ fontWeight: 700, color: '#2563eb' }}>
+                              <td style={{padding: '4px 6px', fontWeight: 700, color: '#2563eb'}}>{vale.codigo || 'S-000'}</td>
+                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
+                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio}</td>
+                              <td style={{padding: '4px 6px', fontWeight: 700, color: '#2563eb'}}>
                                 ${Number(vale.valor).toLocaleString()}
                               </td>
-                              <td style={{ fontWeight: 700, color: '#6366f1' }}>
+                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+                              </td>
+                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
                                 {vale.estado === 'aprobado'
                                   ? `$${getGanancia(vale).toLocaleString()}`
-                                  : <span className="text-muted">-</span>
-                                }
+                                  : vale.estado === 'rechazado'
+                                    ? 'Rechazado'
+                                    : 'Pendiente'}
                               </td>
-                              <td>
-                                <Badge
-                                  bg={
-                                    vale.estado === 'aprobado'
-                                      ? 'success'
-                                      : vale.estado === 'rechazado'
-                                      ? 'danger'
-                                      : 'warning'
-                                  }
-                                  text={vale.estado === 'pendiente' ? 'dark' : undefined}
-                                  style={{ fontSize: '0.8rem' }}
-                                >
-                                  {vale.estado === 'aprobado'
-                                    ? 'OK'
+                              <td style={{padding: '4px 6px'}}>
+                                <span className={`badge ${
+                                  vale.estado === 'aprobado'
+                                    ? 'bg-success'
                                     : vale.estado === 'rechazado'
-                                    ? 'NO'
-                                    : 'Pend.'}
-                                </Badge>
+                                    ? 'bg-danger'
+                                    : 'bg-warning text-dark'
+                                }`}>
+                                  {vale.estado === 'aprobado'
+                                    ? 'Aprobado'
+                                    : vale.estado === 'rechazado'
+                                    ? 'Rechazado'
+                                    : 'Pendiente'}
+                                </span>
                               </td>
-                              <td>
+                              <td style={{padding: '4px 6px'}}>
                                 {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#16a34a', fontWeight: 700 }}>
-                                    <i className="bi bi-check-circle" style={{ marginRight: 4 }}></i>
+                                  <span style={{ color: '#22c55e', fontWeight: 700 }}>
+                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
                                     {vale.aprobadoPor}
                                   </span>
                                 ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#ef4444', fontWeight: 700 }}>
-                                    <i className="bi bi-x-circle" style={{ marginRight: 4 }}></i>
+                                  <span style={{ color: '#dc3545', fontWeight: 700 }}>
+                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
                                     {vale.aprobadoPor}
                                   </span>
                                 ) : (
@@ -457,123 +486,115 @@ function ValesServicio() {
                       </tbody>
                     </Table>
                   </div>
-
-                  {/* Vista optimizada para móviles - Lista compacta */}
-                  <div className="d-block d-md-none">
+                  {/* Tabla para pantallas pequeñas */}
+                  <div className="d-md-none">
                     {valesFiltrados.length === 0 ? (
-                      <div className="text-center text-muted p-4">
-                        <i className="bi bi-inbox" style={{ fontSize: '2rem', opacity: 0.5 }}></i>
-                        <p className="mt-2 mb-0">No tienes vales enviados para esta fecha.</p>
+                      <div className="text-center text-muted py-4">
+                        <i className="bi bi-info-circle" style={{ fontSize: '2rem' }}></i>
+                        <p className="mb-0" style={{ fontSize: '1.1rem' }}>
+                          No tienes vales enviados para esta fecha.
+                        </p>
                       </div>
                     ) : (
-                      <div className="row g-2">
-                        {valesFiltrados.map(vale => (
-                          <div key={vale.id} className="col-12">
-                            <div
-                              className="card border-0 shadow-sm"
-                              style={{
-                                borderRadius: 12,
-                                borderLeft: `6px solid ${
-                                  vale.estado === 'aprobado'
-                                    ? '#22c55e'
-                                    : vale.estado === 'rechazado'
-                                    ? '#ef4444'
-                                    : '#f59e0b'
-                                }`,
-                                background: vale.estado === 'rechazado'
-                                  ? '#fef2f2'
-                                  : vale.estado === 'aprobado'
-                                  ? '#f0fdf4'
-                                  : '#fffbeb',
-                                fontWeight: 500,
-                                fontSize: 15,
-                              }}
-                            >
-                              <div className="card-body p-3">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <div className="d-flex align-items-center">
-                                    <span
-                                      style={{
-                                        fontSize: '0.9rem',
-                                        fontWeight: 700,
-                                        color: '#2563eb',
-                                        backgroundColor: '#e0e7ef',
-                                        padding: '2px 8px',
-                                        borderRadius: 6,
-                                        marginRight: 8,
-                                      }}
-                                    >
-                                      {vale.codigo || 'S-000'}
-                                    </span>
-                                    <span style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
-                                      {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  </div>
-                                  <Badge
-                                    bg={
-                                      vale.estado === 'aprobado'
-                                        ? 'success'
-                                        : vale.estado === 'rechazado'
-                                        ? 'danger'
-                                        : 'warning'
-                                    }
-                                    text={vale.estado === 'pendiente' ? 'dark' : undefined}
-                                    style={{ fontSize: '0.8rem' }}
-                                  >
-                                    {vale.estado === 'aprobado'
-                                      ? 'OK'
-                                      : vale.estado === 'rechazado'
-                                      ? 'NO'
-                                      : 'Pend.'}
-                                  </Badge>
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '1rem',
-                                    fontWeight: 600,
-                                    color: '#374151',
-                                    marginBottom: 8,
-                                  }}
-                                >
-                                  {vale.servicio}
-                                </div>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div>
-                                    <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>Valor: </span>
-                                    <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '1rem' }}>
-                                      ${Number(vale.valor).toLocaleString()}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>Ganancia: </span>
-                                    <span style={{ fontWeight: 700, color: '#6366f1', fontSize: '1rem' }}>
-                                      {vale.estado === 'aprobado'
-                                        ? `$${getGanancia(vale).toLocaleString()}`
-                                        : <span style={{ color: '#9ca3af' }}>-</span>
-                                      }
-                                    </span>
-                                  </div>
-                                </div>
-                                {(vale.estado === 'aprobado' || vale.estado === 'rechazado') && vale.aprobadoPor && (
-                                  <div
-                                    style={{
-                                      fontSize: '0.8rem',
-                                      color: vale.estado === 'aprobado' ? '#16a34a' : '#ef4444',
-                                      marginTop: 6,
-                                      paddingTop: 6,
-                                      borderTop: '1px solid #e0e7ef',
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    <i className={`bi bi-${vale.estado === 'aprobado' ? 'check' : 'x'}-circle me-1`}></i>
-                                    {vale.aprobadoPor}
-                                  </div>
-                                )}
-                              </div>
+                      valesFiltrados.map(vale => (
+                        <div
+                          key={vale.id}
+                          className="mb-3"
+                          style={{
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            boxShadow: "0 1px 8px #0001",
+                            background: vale.estado === 'rechazado'
+                              ? '#fef2f2'
+                              : vale.estado === 'aprobado'
+                                ? '#f0fdf4'
+                                : '#fffbeb',
+                            borderLeft: `6px solid ${
+                              vale.estado === 'aprobado'
+                                ? '#22c55e'
+                                : vale.estado === 'rechazado'
+                                ? '#dc3545'
+                                : '#f59e42'
+                            }`
+                          }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center" style={{ padding: '12px 16px', background: '#f3f4f6' }}>
+                            <div>
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Código:</span>
+                              <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '1.1rem', marginLeft: 6 }}>
+                                {vale.codigo || 'S-000'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className={`badge ${
+                                vale.estado === 'aprobado'
+                                  ? 'bg-success'
+                                  : vale.estado === 'rechazado'
+                                  ? 'bg-danger'
+                                  : 'bg-warning text-dark'
+                              }`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                                {vale.estado === 'aprobado'
+                                  ? 'Aprobado'
+                                  : vale.estado === 'rechazado'
+                                  ? 'Rechazado'
+                                  : 'Pendiente'}
+                              </span>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                          <div style={{ padding: '16px', borderTop: '1px solid #e0e7ef' }}>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Fecha:</span>
+                              <span style={{ fontWeight: 600, color: '#374151', fontSize: '1rem', marginLeft: 6 }}>
+                                {vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Servicio:</span>
+                              <span style={{ fontWeight: 600, color: '#2563eb', fontSize: '1rem', marginLeft: 6 }}>
+                                {vale.servicio}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Valor:</span>
+                              <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '1.1rem', marginLeft: 6 }}>
+                                ${Number(vale.valor).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Comisión:</span>
+                              <span style={{ fontWeight: 700, color: '#6366f1', fontSize: '1.1rem', marginLeft: 6 }}>
+                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Ganancia:</span>
+                              <span style={{ fontWeight: 700, color: '#6366f1', fontSize: '1.1rem', marginLeft: 6 }}>
+                                {vale.estado === 'aprobado'
+                                  ? `$${getGanancia(vale).toLocaleString()}`
+                                  : vale.estado === 'rechazado'
+                                    ? 'Rechazado'
+                                    : 'Pendiente'}
+                              </span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Aprobado por:</span>
+                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#22c55e', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
+                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#dc3545', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
+                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : (
+                                <span className="text-secondary" style={{ marginLeft: 6 }}>-</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
                 </>
@@ -587,18 +608,9 @@ function ValesServicio() {
 }
 
 function getHoyLocal() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 10);
+  const hoy = new Date();
+  hoy.setHours(hoy.getHours() - hoy.getTimezoneOffset() / 60);
+  return hoy.toISOString().slice(0, 10);
 }
-
-/* 
-  Reglas de seguridad de Firestore para la colección 'vales_servicio':
-
-  allow read, write: if request.auth != null;
-
-  - Permite a los usuarios autenticados leer y escribir en la colección.
-  - Los usuarios no autenticados no podrán acceder a esta colección.
-*/
 
 export default ValesServicio;

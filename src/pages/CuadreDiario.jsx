@@ -15,7 +15,8 @@ function CuadreDiario() {
   const [nombresUsuarios, setNombresUsuarios] = useState({});
   const { rol } = useAuth ? useAuth() : { rol: null };
   const [vista, setVista] = useState('tabla');
-  const [orden, setOrden] = useState('desc');
+  const [ordenColumna, setOrdenColumna] = useState('fecha');
+  const [ordenDireccion, setOrdenDireccion] = useState('desc');
   function getHoyLocal() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -27,10 +28,11 @@ function CuadreDiario() {
 
   // --- FUNCION CORRECTA PARA MONTO PERCIBIDO ---
   function getMontoPercibido(vale) {
-    if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && vale.dividirPorDos) {
-      return Number(vale.valor) / 2;
+    if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado') {
+      const base = vale.dividirPorDos ? Number(vale.valor) / 2 : Number(vale.valor);
+      return base + (Number(vale.comisionExtra) || 0);
     }
-    return Number(vale.valor);
+    return 0;
   }
 
   useEffect(() => {
@@ -152,8 +154,15 @@ function CuadreDiario() {
       .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
 
     const totalPercibido = valesFiltradosPDF
-      .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-      .reduce((a, v) => a + getMontoPercibido(v), 0);
+      .filter(v => v.estado === 'aprobado')
+      .reduce((a, v) => {
+        if (v.tipo === 'Ingreso') {
+          return a + getMontoPercibido(v);
+        } else if (v.tipo === 'Egreso') {
+          return a - (Number(v.valor) || 0);
+        }
+        return a;
+      }, 0);
 
     let startY = 20;
 
@@ -209,22 +218,12 @@ function CuadreDiario() {
     let currentUser = '';
     
     valesOrdenados.forEach(v => {
-      const email = v.peluqueroEmail || 'Desconocido';
-      const nombre = v.peluqueroNombre || nombresUsuarios[email] || email;
-      
-      // Si es un usuario diferente, agrega una fila separadora
-      if (currentUser !== email) {
-        if (currentUser !== '') {
-          // Fila separadora visual
-          rows.push(['', '', '', '', '', '', '', '', '', '', '', '']);
-        }
-        currentUser = email;
-      }
-      
+      // Asegúrate de que v.fecha es un objeto Date
+      const fecha = v.fecha instanceof Date ? v.fecha : new Date(v.fecha);
       rows.push([
-        nombre.length > 15 ? nombre.substring(0, 15) + '...' : nombre,
-        v.fecha.toLocaleDateString(),
-        v.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        v.codigo || '-',
+        fecha.toLocaleDateString(),
+        fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         v.tipo,
         v.servicio || v.concepto || '-',
         v.formaPago ? v.formaPago.charAt(0).toUpperCase() + v.formaPago.slice(1) : '-',
@@ -233,15 +232,16 @@ function CuadreDiario() {
         getMontoPercibido(v).toLocaleString(),
                 v.estado || 'pendiente',
         v.aprobadoPor || '-',
-        v.observacion || '-'
+        v.observacion || '-',
+        v.comisionExtra ? `+$${Number(v.comisionExtra).toLocaleString()}` : '-'
       ]);
     });
 
     // Dibuja la tabla única
     autoTable(doc, {
       head: [[
-        'Usuario', 'Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'F. Pago', 'Local',
-        'Valor', 'M. Percibido', 'Estado', 'Aprobado por', 'Observación'
+        'Código', 'Fecha', 'Hora', 'Tipo', 'Servicio/Concepto', 'F. Pago', 'Local',
+        'Valor', 'M. Percibido', 'Estado', 'Aprobado por', 'Observación', 'Comisión'
       ]],
       body: rows,
       startY: startY,
@@ -253,7 +253,7 @@ function CuadreDiario() {
         valign: 'middle'
       },
       columnStyles: {
-        0: { cellWidth: 25, fontStyle: 'bold' }, // Usuario
+        0: { cellWidth: 18 }, // Código
         1: { cellWidth: 18 }, // Fecha
         2: { cellWidth: 12 }, // Hora
         3: { cellWidth: 15 }, // Tipo
@@ -265,6 +265,7 @@ function CuadreDiario() {
         9: { cellWidth: 18 }, // Estado
         10: { cellWidth: 25 }, // Aprobado por
         11: { cellWidth: 30 }, // Observación
+        12: { cellWidth: 18, halign: 'right' } // Comisión
       },
       theme: 'striped',
       margin: { left: 14, right: 14 },
@@ -273,17 +274,6 @@ function CuadreDiario() {
         textColor: 255, 
         fontSize: 8, 
         fontStyle: 'bold' 
-      },
-      didDrawCell: function(data) {
-        // Colorea las filas según el tipo
-        if (data.section === 'body' && data.column.index === 3) {
-          const tipo = data.cell.text[0];
-          if (tipo === 'Ingreso') {
-            doc.setFillColor(220, 252, 231); // Verde claro
-          } else if (tipo === 'Egreso') {
-            doc.setFillColor(254, 226, 226); // Rojo claro
-          }
-        }
       }
     });
 
@@ -397,11 +387,27 @@ function CuadreDiario() {
   });
 
   const totalPercibido = valesFiltrados
-    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-    .reduce((a, v) => a + getMontoPercibido(v), 0);
+    .filter(v => v.estado === 'aprobado')
+    .reduce((a, v) => {
+      if (v.tipo === 'Ingreso') {
+        return a + getMontoPercibido(v);
+      } else if (v.tipo === 'Egreso') {
+        return a - (Number(v.valor) || 0);
+      }
+      return a;
+    }, 0);
 
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
   if (error) return <Alert variant="danger">{error}</Alert>;
+
+  const handleOrdenar = (col) => {
+    if (ordenColumna === col) {
+      setOrdenDireccion(ordenDireccion === 'asc' ? 'desc' : 'asc');
+    } else {
+      setOrdenColumna(col);
+      setOrdenDireccion('asc');
+    }
+  };
 
   return (
     <div className="cuadre-diario-container">
@@ -472,7 +478,7 @@ function CuadreDiario() {
                   <Col xs={12} sm={6} md={2}>
                     <Form.Group>
                       <Form.Label>Orden</Form.Label>
-                      <Form.Select value={orden} onChange={e => setOrden(e.target.value)}>
+                      <Form.Select value={ordenDireccion} onChange={e => setOrdenDireccion(e.target.value)}>
                         <option value="desc">Más recientes primero</option>
                         <option value="asc">Más antiguos primero</option>
                       </Form.Select>
@@ -541,7 +547,7 @@ function CuadreDiario() {
                   <ToggleButton id="vista-tabla" value="tabla" variant="outline-primary" size="sm">
                     Tabla
                   </ToggleButton>
-                  <ToggleButton id="vista-cards" value="cards" variant="outline-primary" size="sm">
+                  <ToggleButton id="vista-cards" value="cards" variant="outline-primary" size="sm" disabled>
                     Tarjetas
                   </ToggleButton>
                 </ToggleButtonGroup>
@@ -549,277 +555,180 @@ function CuadreDiario() {
                   <i className="bi bi-file-earmark-arrow-down me-1"></i>Descargar PDF
                 </Button>
               </div>
-              {Object.keys(agrupados).length === 0 ? (
+              {/* --- SOLO UNA TABLA GLOBAL --- */}
+              {valesFiltrados.length === 0 ? (
                 <Alert variant="info">No hay vales para mostrar.</Alert>
               ) : (
-                Object.keys(agrupados).map(email => {
-                  // ORDENAR LA LISTA SEGÚN EL FILTRO DE ORDEN
-                  const lista = [...agrupados[email]].sort((a, b) =>
-                    orden === 'asc' ? a.fecha - b.fecha : b.fecha - a.fecha
-                  );
-                  const nombre = lista.find(v => v.peluqueroNombre)?.peluqueroNombre || nombresUsuarios[email] || '';
-
-                  const totalIngresosU = lista
-                    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-                    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
-
-                  const totalEgresosU = lista
-                    .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
-                    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
-
-                  const saldoU = totalIngresosU - totalEgresosU;
-
-                  const totalPendienteU = lista
-                    .filter(v => v.estado === 'pendiente')
-                    .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
-
-                  const totalPercibidoU = lista
-                    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-                    .reduce((a, v) => a + getMontoPercibido(v), 0);
-
-                  return (
-                    <div key={email} className="mb-5">
-                      <h5 style={{fontWeight: 600, marginBottom: 12}}>
-                        {filtros.usuario
-                          ? (nombresUsuarios[email] ? `${nombresUsuarios[email]} (${email})` : email)
-                          : email}
-                      </h5>
-                      <div className="mb-2">
-                        <span style={{color:'#22c55e', fontWeight:600}}>
-                          Ingresos: ${totalIngresosU.toLocaleString()}
-                        </span>
-                        {' | '}
-                        <span style={{color:'#dc3545', fontWeight:600}}>
-                          Egresos: ${totalEgresosU.toLocaleString()}
-                        </span>
-                        {' | '}
-                        <span style={{color:saldoU>=0?'#22c55e':'#dc3545', fontWeight:600}}>
-                          Saldo: ${saldoU.toLocaleString()}
-                        </span>
-                        {' | '}
-                        <span style={{color:'#f59e42', fontWeight:600}}>
-                          Pendiente: ${totalPendienteU.toLocaleString()}
-                        </span>
-                        {' | '}
-                        <span style={{color:'#6366f1', fontWeight:600}}>
-                          Monto Percibido: ${totalPercibidoU.toLocaleString()}
-                        </span>
-                      </div>
-                      {vista === 'cards' ? (
-                        <Row xs={1} md={2} lg={3} className="g-3">
-                          {lista.map(vale => (
-                            <Col key={vale.id}>
-                              <div className={`vale-card ${vale.tipo === 'Egreso' ? 'egreso' : ''} shadow-sm p-3 mb-2 bg-white rounded`}>
-                                <div>
-                                  <b>{vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
-                                  <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'} ms-2`}>
-                                    {vale.tipo}
-                                  </span>
-                                  <span className={`badge ms-2 ${
-                                    vale.estado === 'aprobado'
-                                      ? 'bg-success'
-                                      : vale.estado === 'rechazado'
-                                      ? 'bg-danger'
-                                      : 'bg-warning text-dark'
-                                  }`}>
-                                    {vale.estado === 'aprobado'
-                                      ? 'Aprobado'
-                                      : vale.estado === 'rechazado'
-                                      ? 'Rechazado'
-                                      : 'Pendiente'}
-                                  </span>
-                                </div>
-                                <div><b>Servicio/Concepto:</b> {vale.servicio || vale.concepto || '-'}</div>
-                                <div><b>Forma de Pago:</b> {vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</div>
-                                <div className={`monto ${vale.tipo === 'Ingreso' ? 'ingreso' : 'egreso'}`}>
-                                  {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
-                                </div>
-                                <div>
-                                  <b>Monto Percibido:</b> <span style={{color:'#6366f1', fontWeight:600}}>${getMontoPercibido(vale).toLocaleString()}</span>
-                                </div>
-                                <div>
-                                  <b>Aprobado por:</b>{' '}
-                                  {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                    <span style={{ color: '#22c55e', fontWeight: 600 }}>
-                                      <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                      {vale.aprobadoPor}
-                                    </span>
-                                  ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                    <span style={{ color: '#dc3545', fontWeight: 600 }}>
-                                      <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                      {vale.aprobadoPor}
-                                    </span>
-                                  ) : (
-                                    <span className="text-secondary">-</span>
-                                  )}
-                                </div>
-                                <div><b>Observación:</b> {vale.observacion || '-'}</div>
-                                <div><b>Local:</b> {vale.local || '-'}</div>
-                                {(rol === 'admin' || rol === 'anfitrion') && (
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    className="mt-2"
-                                    onClick={() => handleEliminar(vale)}
-                                  >
-                                    Eliminar
-                                  </Button>
-                                )}
-                              </div>
-                            </Col>
-                          ))}
-                          <Col xs={12}>
-                            <div className="text-end mt-2" style={{fontWeight: 'bold', fontSize: 16}}>
-                              Saldo: <span style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</span>
-                              <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
-                              <span style={{marginLeft: 12, color: '#6366f1'}}>Monto Percibido: ${totalPercibidoU.toLocaleString()}</span>
-                            </div>
-                          </Col>
-                        </Row>
-                      ) : (
-                        <div
-                          className="table-responsive"
-                          style={{
-                            overflowX: 'auto',
-                            width: '100%',
-                            background: "#fff",
-                            padding: 0,
-                            marginLeft: 0,
-                            marginRight: 0,
-                          }}
-                        >
-                          <Table
-                            striped
-                            bordered
-                            hover
-                            size="sm"
-                            className="mb-0"
+                <div className="table-responsive" style={{overflowX: 'auto', width: '100%', background: "#fff", padding: 0, marginLeft: 0, marginRight: 0}}>
+                  <Table
+                    striped
+                    bordered
+                    hover
+                    size="sm"
+                    className="mb-0"
+                    style={{
+                      fontSize: 14,
+                      minWidth: 1100,
+                      background: "#fff"
+                    }}
+                  >
+                    <thead>
+  <tr>
+    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('codigo')}>
+      Código {ordenColumna === 'codigo' && (ordenDireccion === 'asc' ? '▲' : '▼')}
+    </th>
+    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('fecha')}>
+      Fecha {ordenColumna === 'fecha' && (ordenDireccion === 'asc' ? '▲' : '▼')}
+    </th>
+    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('hora')}>
+      Hora {ordenColumna === 'hora' && (ordenDireccion === 'asc' ? '▲' : '▼')}
+    </th>
+    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('tipo')}>
+      Tipo {ordenColumna === 'tipo' && (ordenDireccion === 'asc' ? '▲' : '▼')}
+    </th>
+    <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
+    <th style={{padding: '4px 6px'}}>Forma de Pago</th>
+    <th style={{padding: '4px 6px'}}>Local</th>
+    <th style={{padding: '4px 6px', cursor: 'pointer'}} onClick={() => handleOrdenar('valor')}>
+      Monto {ordenColumna === 'valor' && (ordenDireccion === 'asc' ? '▲' : '▼')}
+    </th>
+    <th style={{padding: '4px 6px'}}>Monto Percibido</th>
+    <th style={{padding: '4px 6px'}}>Estado</th>
+    <th style={{padding: '4px 6px'}}>Aprobado por</th>
+    <th style={{padding: '4px 6px'}}>Observación</th>
+    <th style={{padding: '4px 6px'}}>Comisión</th>
+    {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
+  </tr>
+</thead>
+                    <tbody>
+                      {valesFiltrados
+                        .sort((a, b) => {
+                          let valA, valB;
+                          switch (ordenColumna) {
+                            case 'codigo':
+                              valA = a.codigo || '';
+                              valB = b.codigo || '';
+                              break;
+                            case 'fecha':
+                              valA = a.fecha;
+                              valB = b.fecha;
+                              break;
+                            case 'hora':
+                              valA = a.fecha.getHours() * 60 + a.fecha.getMinutes();
+                              valB = b.fecha.getHours() * 60 + b.fecha.getMinutes();
+                              break;
+                            case 'tipo':
+                              valA = a.tipo;
+                              valB = b.tipo;
+                              break;
+                            case 'valor':
+                              valA = Number(a.valor) || 0;
+                              valB = Number(b.valor) || 0;
+                              break;
+                            default:
+                              valA = a[ordenColumna] || '';
+                              valB = b[ordenColumna] || '';
+                          }
+                          if (valA < valB) return ordenDireccion === 'asc' ? -1 : 1;
+                          if (valA > valB) return ordenDireccion === 'asc' ? 1 : -1;
+                          return 0;
+                        })
+                        .map(vale => (
+                          <tr
+                            key={vale.id}
                             style={{
-                              fontSize: 14,
-                              minWidth: 1100,
-                              background: "#fff"
+                              borderLeft: `6px solid ${
+                                vale.estado === 'aprobado'
+                                  ? '#22c55e'
+                                  : vale.estado === 'rechazado'
+                                  ? '#dc3545'
+                                  : '#f59e42'
+                              }`,
+                              background: vale.estado === 'rechazado'
+                                ? '#fef2f2'
+                                : vale.estado === 'aprobado'
+                                ? '#f0fdf4'
+                                : '#fffbeb',
+                              fontWeight: 500,
+                              fontSize: 15,
                             }}
                           >
-                            <thead>
-                              <tr>
-                                <th style={{padding: '4px 6px'}}>Código</th>
-                                <th style={{padding: '4px 6px'}}>Fecha</th>
-                                <th style={{padding: '4px 6px'}}>Hora</th>
-                                <th style={{padding: '4px 6px'}}>Tipo</th>
-                                <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
-                                <th style={{padding: '4px 6px'}}>Forma de Pago</th>
-                                <th style={{padding: '4px 6px'}}>Local</th>
-                                <th style={{padding: '4px 6px'}}>Monto</th>
-                                <th style={{padding: '4px 6px'}}>Monto Percibido</th>
-                                <th style={{padding: '4px 6px'}}>Estado</th>
-                                <th style={{padding: '4px 6px'}}>Aprobado por</th>
-                                <th style={{padding: '4px 6px'}}>Observación</th>
-                                {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {lista.map(vale => (
-                                <tr
-                                  key={vale.id}
-                                  style={{
-                                    borderLeft: `6px solid ${
-                                      vale.estado === 'aprobado'
-                                        ? '#22c55e'
-                                        : vale.estado === 'rechazado'
-                                        ? '#dc3545'
-                                        : '#f59e42'
-                                    }`,
-                                    background: vale.estado === 'rechazado'
-                                      ? '#fef2f2'
-                                      : vale.estado === 'aprobado'
-                                      ? '#f0fdf4'
-                                      : '#fffbeb',
-                                    fontWeight: 500,
-                                    fontSize: 15,
-                                  }}
+                            <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
+                              {vale.codigo || '-'}
+                            </td>
+                            <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
+                            <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td style={{padding: '4px 6px'}}>
+                              <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
+                                {vale.tipo}
+                              </span>
+                            </td>
+                            <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
+                            <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
+                            <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
+                            <td style={{
+                              padding: '4px 6px',
+                              color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
+                              fontWeight: 700
+                            }}>
+                              {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+                            </td>
+                            <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                              {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
+                                ? `$${getMontoPercibido(vale).toLocaleString()}`
+                                : '-'}
+
+                            </td>
+                            <td style={{padding: '4px 6px'}}>
+                              <span className={`badge ${
+                                vale.estado === 'aprobado'
+                                  ? 'bg-success'
+                                  : vale.estado === 'rechazado'
+                                  ? 'bg-danger'
+                                  : 'bg-warning text-dark'
+                              }`}>
+                                {vale.estado === 'aprobado'
+                                  ? 'Aprobado'
+                                  : vale.estado === 'rechazado'
+                                  ? 'Rechazado'
+                                  : 'Pendiente'}
+                              </span>
+                            </td>
+                            <td style={{padding: '4px 6px'}}>
+                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#22c55e', fontWeight: 700 }}>
+                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#dc3545', fontWeight: 700 }}>
+                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : (
+                                <span className="text-secondary">-</span>
+                              )}
+                            </td>
+                            <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
+                            <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                              {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+                            </td>
+                            {(rol === 'admin' || rol === 'anfitrion') && (
+                              <td style={{padding: '4px 6px'}}>
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  onClick={() => handleEliminar(vale)}
                                 >
-                                  <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
-                                    {vale.codigo || '-'}
-                                  </td>
-                                  <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
-                                  <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                  <td style={{padding: '4px 6px'}}>
-                                    <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
-                                      {vale.tipo}
-                                    </span>
-                                  </td>
-                                  <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
-                                  <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                                  <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
-                                  <td style={{
-                                    padding: '4px 6px',
-                                    color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
-                                    fontWeight: 700
-                                  }}>
-                                    {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
-                                  </td>
-                                  <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                                    ${getMontoPercibido(vale).toLocaleString()}
-                                  </td>
-                                  <td style={{padding: '4px 6px'}}>
-                                    <span className={`badge ${
-                                      vale.estado === 'aprobado'
-                                        ? 'bg-success'
-                                        : vale.estado === 'rechazado'
-                                        ? 'bg-danger'
-                                        : 'bg-warning text-dark'
-                                    }`}>
-                                      {vale.estado === 'aprobado'
-                                        ? 'Aprobado'
-                                        : vale.estado === 'rechazado'
-                                        ? 'Rechazado'
-                                        : 'Pendiente'}
-                                    </span>
-                                  </td>
-                                  <td style={{padding: '4px 6px'}}>
-                                    {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                      <span style={{ color: '#22c55e', fontWeight: 700 }}>
-                                        <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                        {vale.aprobadoPor}
-                                      </span>
-                                    ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                      <span style={{ color: '#dc3545', fontWeight: 700 }}>
-                                        <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                        {vale.aprobadoPor}
-                                      </span>
-                                    ) : (
-                                      <span className="text-secondary">-</span>
-                                    )}
-                                  </td>
-                                  <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
-                                  {(rol === 'admin' || rol === 'anfitrion') && (
-                                    <td style={{padding: '4px 6px'}}>
-                                      <Button
-                                        variant="danger"
-                                        size="sm"
-                                        onClick={() => handleEliminar(vale)}
-                                      >
-                                        Eliminar
-                                      </Button>
-                                    </td>
-                                  )}
-                                </tr>
-                              ))}
-                              <tr>
-                                <td colSpan={7} className="text-end"><b>Saldo</b></td>
-                                <td colSpan={rol === 'admin' || rol === 'anfitrion' ? 4 : 3}>
-                                  <b style={{color: saldoU >= 0 ? '#22c55e' : '#dc3545'}}>${saldoU.toLocaleString()}</b>
-                                  <span style={{marginLeft: 12, color: '#f59e42'}}>Pendiente: ${totalPendienteU.toLocaleString()}</span>
-                                  <span style={{marginLeft: 12, color: '#6366f1'}}>Monto Percibido: ${totalPercibidoU.toLocaleString()}</span>
-                                </td>
-                              </tr>
-                            </tbody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
+                                  Eliminar
+                                </Button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                    </tbody>
+                  </Table>
+                </div>
               )}
             </Card.Body>
           </Card>

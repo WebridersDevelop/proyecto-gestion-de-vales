@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, Timestamp, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
+import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, getDocs, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 
@@ -33,7 +33,17 @@ function ValesGasto() {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
-        if (data.peluqueroUid === user.uid) {
+        // Mostrar todos los vales si es admin, solo los propios si no
+        if (
+          rol === 'admin' ||
+          rol === 'anfitrion'
+        ) {
+          vales.push({
+            ...data,
+            id: docu.id,
+            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+          });
+        } else if (data.peluqueroUid === user.uid) {
           vales.push({
             ...data,
             id: docu.id,
@@ -46,7 +56,7 @@ function ValesGasto() {
       setLoading(false);
     });
     return () => unsub();
-  }, [user, mensaje]);
+  }, [user, mensaje, rol]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -70,22 +80,25 @@ function ValesGasto() {
         nombre = usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : 'Sin nombre';
       }
 
-      // --- CÓDIGO CORRELATIVO DIARIO CON PREFIJO G- ---
-      const hoyLocal = getHoyLocal();
-      const valesRef = collection(db, 'vales_gasto');
-      const snapshot = await getDocs(valesRef);
-      const valesHoy = snapshot.docs.filter(docu => {
-        const data = docu.data();
-        if (!data.fecha) return false;
-        const fechaVale = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
-        const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
-          .toISOString()
-          .slice(0, 10);
-        return fechaValeLocal === hoyLocal;
+      // --- CORRELATIVO DIARIO CON TRANSACCIÓN PARA GASTOS ---
+      const hoy = getHoyLocal(); // "YYYY-MM-DD"
+      const contadorRef = doc(db, 'contadores', `vales_gasto_${hoy}`);
+      let nuevoNumero = 1;
+      await runTransaction(db, async (transaction) => {
+        const contadorDoc = await transaction.get(contadorRef);
+        if (contadorDoc.exists()) {
+          nuevoNumero = Number(contadorDoc.data().numero) + 1;
+          transaction.update(contadorRef, { numero: nuevoNumero });
+        } else {
+          transaction.set(contadorRef, { numero: 1 });
+        }
       });
-      const codigoVale = `G-${String(valesHoy.length + 1).padStart(3, '0')}`;
+      const codigoVale = `G-${String(nuevoNumero).padStart(3, '0')}`;
 
-      await addDoc(valesRef, {
+      const valesRef = collection(db, 'vales_gasto');
+      const docRef = doc(valesRef);
+
+      await setDoc(docRef, {
         concepto: concepto.trim(),
         valor: Number(valor),
         peluqueroUid: user.uid,
@@ -94,7 +107,7 @@ function ValesGasto() {
         estado: 'pendiente',
         aprobadoPor: '',
         fecha: Timestamp.now(),
-        codigo: codigoVale // <--- aquí guardas el código
+        codigo: codigoVale
       });
 
       setConcepto('');
@@ -118,7 +131,11 @@ function ValesGasto() {
 
   // Filtro por fecha seleccionada
   const valesFiltrados = valesUsuario.filter(vale => {
-    const fechaVale = vale.fecha.toISOString().slice(0, 10);
+    if (!vale.fecha || !(vale.fecha instanceof Date)) return false;
+    const yyyy = vale.fecha.getFullYear();
+    const mm = String(vale.fecha.getMonth() + 1).padStart(2, '0');
+    const dd = String(vale.fecha.getDate()).padStart(2, '0');
+    const fechaVale = `${yyyy}-${mm}-${dd}`;
     return fechaVale === fechaFiltro;
   });
 
@@ -315,77 +332,94 @@ function ValesGasto() {
                   {/* Vista optimizada para móviles - Lista compacta */}
                   <div className="d-block d-md-none">
                     {valesFiltrados.length === 0 ? (
-                      <div className="text-center text-muted p-4">
-                        <i className="bi bi-inbox" style={{fontSize: '2rem', opacity: 0.5}}></i>
-                        <p className="mt-2 mb-0">No tienes vales de gasto enviados para esta fecha.</p>
+                      <div className="text-center text-muted py-4">
+                        <i className="bi bi-inbox" style={{ fontSize: '2rem', opacity: 0.5 }}></i>
+                        <p className="mb-0" style={{ fontSize: '1.1rem' }}>
+                          No tienes vales de gasto enviados para esta fecha.
+                        </p>
                       </div>
                     ) : (
-                      <div className="row g-2">
-                        {valesFiltrados.map(vale => (
-                          <div key={vale.id} className="col-12">
-                            <div className="card border-0 shadow-sm" style={{
-                              borderRadius: 8,
-                              borderLeft: `4px solid ${
-                                vale.estado === 'aprobado' ? '#22c55e' : 
-                                vale.estado === 'rechazado' ? '#ef4444' : '#f59e0b'
-                              }`
-                            }}>
-                              <div className="card-body p-3">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <div className="d-flex align-items-center">
-                                    <span style={{
-                                      fontSize: '0.8rem', 
-                                      fontWeight: 600, 
-                                      color: '#6b7280',
-                                      backgroundColor: '#f3f4f6',
-                                      padding: '2px 6px',
-                                      borderRadius: 4,
-                                      marginRight: 8
-                                    }}>
-                                      {vale.codigo || 'G-000'}
-                                    </span>
-                                    <span style={{fontSize: '0.75rem', color: '#9ca3af'}}>
-                                      {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  </div>
-                                  <Badge 
-                                    bg={vale.estado === 'aprobado' ? 'success' : vale.estado === 'rechazado' ? 'danger' : 'warning'} 
-                                    style={{fontSize: '0.7rem'}}
-                                  >
-                                    {vale.estado === 'aprobado' ? 'OK' : vale.estado === 'rechazado' ? 'NO' : 'Pend.'}
-                                  </Badge>
-                                </div>
-                                
-                                <div style={{fontSize: '0.9rem', fontWeight: 500, color: '#374151', marginBottom: 8}}>
-                                  {vale.concepto}
-                                </div>
-                                
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div>
-                                    <span style={{fontSize: '0.75rem', color: '#6b7280'}}>Valor: </span>
-                                    <span style={{fontWeight: 600, color: '#ef4444', fontSize: '1rem'}}>
-                                      ${Number(vale.valor).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
-                                
-                                {(vale.estado === 'aprobado' || vale.estado === 'rechazado') && vale.aprobadoPor && (
-                                  <div style={{
-                                    fontSize: '0.75rem',
-                                    color: vale.estado === 'aprobado' ? '#16a34a' : '#ef4444',
-                                    marginTop: 6,
-                                    paddingTop: 6,
-                                    borderTop: '1px solid #f3f4f6'
-                                  }}>
-                                    <i className={`bi bi-${vale.estado === 'aprobado' ? 'check' : 'x'}-circle me-1`}></i>
-                                    {vale.aprobadoPor}
-                                  </div>
-                                )}
-                              </div>
+                      valesFiltrados.map(vale => (
+                        <div
+                          key={vale.id}
+                          className="mb-3"
+                          style={{
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            boxShadow: "0 1px 8px #0001",
+                            background: vale.estado === 'rechazado'
+                              ? '#fef2f2'
+                              : vale.estado === 'aprobado'
+                                ? '#f0fdf4'
+                                : '#fffbeb',
+                            borderLeft: `6px solid ${
+                              vale.estado === 'aprobado'
+                                ? '#22c55e'
+                                : vale.estado === 'rechazado'
+                                ? '#ef4444'
+                                : '#f59e0b'
+                            }`
+                          }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center" style={{ padding: '12px 16px', background: '#f3f4f6' }}>
+                            <div>
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Código:</span>
+                              <span style={{ fontWeight: 700, color: '#ef4444', fontSize: '1.1rem', marginLeft: 6 }}>
+                                {vale.codigo || 'G-000'}
+                              </span>
+                            </div>
+                            <span className={`badge ${
+                              vale.estado === 'aprobado'
+                                ? 'bg-success'
+                                : vale.estado === 'rechazado'
+                                ? 'bg-danger'
+                                : 'bg-warning text-dark'
+                            }`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                              {vale.estado === 'aprobado'
+                                ? 'Aprobado'
+                                : vale.estado === 'rechazado'
+                                ? 'Rechazado'
+                                : 'Pendiente'}
+                            </span>
+                          </div>
+                          <div style={{ padding: '16px', borderTop: '1px solid #e0e7ef' }}>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Fecha:</span>
+                              <span style={{ fontWeight: 600, color: '#374151', fontSize: '1rem', marginLeft: 6 }}>
+                                {vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Concepto:</span>
+                              <span style={{ fontWeight: 600, color: '#ef4444', fontSize: '1rem', marginLeft: 6 }}>
+                                {vale.concepto}
+                              </span>
+                            </div>
+                            <div className="mb-2">
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Valor:</span>
+                              <span style={{ fontWeight: 700, color: '#ef4444', fontSize: '1.1rem', marginLeft: 6 }}>
+                                ${Number(vale.valor).toLocaleString()}
+                              </span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Aprobado por:</span>
+                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#22c55e', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
+                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
+                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
+                                  {vale.aprobadoPor}
+                                </span>
+                              ) : (
+                                <span className="text-secondary" style={{ marginLeft: 6 }}>-</span>
+                              )}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))
                     )}
                   </div>
                 </>
