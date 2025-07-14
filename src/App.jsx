@@ -8,6 +8,7 @@ import CuadreDiario from './pages/CuadreDiario.jsx';
 import AdminOnly from './pages/AdminOnly';
 import CrearUsuario from './pages/CrearUsuario.jsx';
 import AprobarValesServicio from './pages/AprobarValesServicio';
+import PerfilUsuario from './pages/PerfilUsuario.jsx';
 import './App.css';
 import React, { useEffect } from 'react';
 import InstallPWAButton from './InstallPWAButton';
@@ -25,13 +26,13 @@ function AppContent() {
   // Redirigir anfitrión siempre al inicio
   useEffect(() => {
     if (!loading && rol === 'anfitrion' &&
-      !['/', '/vales-servicio', '/vales-gasto', '/aprobar-vales-servicio', '/cuadre-diario'].includes(location.pathname)
+      !['/', '/vales-servicio', '/vales-gasto', '/aprobar-vales-servicio', '/cuadre-diario', '/perfil'].includes(location.pathname)
     ) {
       navigate('/', { replace: true });
     }
     // Cambia aquí la lógica para los nuevos roles
     if (!loading && ['barbero', 'estilista', 'estetica'].includes(rol) &&
-      !['/', '/vales-servicio', '/vales-gasto'].includes(location.pathname)
+      !['/', '/vales-servicio', '/vales-gasto', '/perfil'].includes(location.pathname)
     ) {
       navigate('/', { replace: true });
     }
@@ -96,6 +97,9 @@ function AppContent() {
               ? <AprobarValesServicio />
               : <HomeObento />
           } />
+          <Route path="/perfil" element={
+            rol ? <PerfilUsuario /> : <Login />
+          } />
         </Routes>
       </main>
 
@@ -103,54 +107,95 @@ function AppContent() {
       {showBottomMenu && (
         <nav className="bottom-nav" aria-label="Menú principal">
           <div className="bottom-nav-inner">
-            <NavLink className="bottom-nav-link" to="/" end>
-              <i className="bi bi-house" aria-hidden="true"></i>
+            <NavLink 
+              className="bottom-nav-link" 
+              to="/" 
+              end
+              style={{'--nav-color': '#22c55e'}}
+            >
+              <i className="bi bi-house-heart" aria-hidden="true"></i>
               <span>Inicio</span>
             </NavLink>
             {rol === 'admin' && (
-              <NavLink className="bottom-nav-link" to="/dashboard">
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/dashboard"
+                style={{'--nav-color': '#6366f1'}}
+              >
                 <i className="bi bi-speedometer2" aria-hidden="true"></i>
                 <span>Dashboard</span>
               </NavLink>
             )}
             {(rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol)) && (
-              <NavLink className="bottom-nav-link" to="/vales-servicio">
-                <i className="bi bi-receipt" aria-hidden="true"></i>
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/vales-servicio"
+                style={{'--nav-color': '#3b82f6'}}
+              >
+                <i className="bi bi-receipt-cutoff" aria-hidden="true"></i>
                 <span>Vales</span>
               </NavLink>
             )}
             {(rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol)) && (
-              <NavLink className="bottom-nav-link" to="/vales-gasto">
-                <i className="bi bi-cash-stack" aria-hidden="true"></i>
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/vales-gasto"
+                style={{'--nav-color': '#f59e0b'}}
+              >
+                <i className="bi bi-cash-coin" aria-hidden="true"></i>
                 <span>Gastos</span>
               </NavLink>
             )}
             {rol === 'admin' && (
-              <NavLink className="bottom-nav-link" to="/crear-usuario">
-                <i className="bi bi-person-plus" aria-hidden="true"></i>
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/crear-usuario"
+                style={{'--nav-color': '#10b981'}}
+              >
+                <i className="bi bi-person-plus-fill" aria-hidden="true"></i>
                 <span>Crear</span>
               </NavLink>
             )}
             {(rol === 'admin' || rol === 'anfitrion') && (
-              <NavLink className="bottom-nav-link" to="/aprobar-vales-servicio">
-                <i className="bi bi-check2-square" aria-hidden="true"></i>
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/aprobar-vales-servicio"
+                style={{'--nav-color': '#8b5cf6'}}
+              >
+                <i className="bi bi-shield-check" aria-hidden="true"></i>
                 <span>Aprobar</span>
               </NavLink>
             )}
             {(rol === 'admin' || rol === 'anfitrion') && (
-              <NavLink className="bottom-nav-link" to="/cuadre-diario">
+              <NavLink 
+                className="bottom-nav-link" 
+                to="/cuadre-diario"
+                style={{'--nav-color': '#06b6d4'}}
+              >
                 <i className="bi bi-table" aria-hidden="true"></i>
                 <span>Cuadre</span>
               </NavLink>
             )}
             {rol && (
-              <button
-                className="bottom-nav-link border-0 bg-transparent"
-                style={{outline: 'none'}}
+              <button 
+                className="bottom-nav-link" 
                 onClick={logout}
+                style={{
+                  '--nav-color': '#dc2626',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#dc2626'
+                }}
                 title="Cerrar sesión"
                 aria-label="Cerrar sesión"
-                type="button"
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = '#fee2e2';
+                  e.target.style.borderRadius = '12px';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'transparent';
+                }}
               >
                 <i className="bi bi-box-arrow-right" aria-hidden="true"></i>
                 <span>Salir</span>

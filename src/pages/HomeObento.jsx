@@ -1,120 +1,231 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, NavLink } from 'react-router-dom';
-import { Row, Col, Card } from 'react-bootstrap';
+import { Row, Col, Card, Badge } from 'react-bootstrap';
+import { useState, useEffect } from 'react';
 
 const buttonStyles = {
   base: {
-    minWidth: 130,
-    minHeight: 120,
-    fontSize: 19,
+    minWidth: 140,
+    minHeight: 140,
+    fontSize: 16,
     border: 'none',
-    borderRadius: 18,
-    boxShadow: '0 2px 12px #0002',
+    borderRadius: 20,
+    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'transform 0.13s, box-shadow 0.13s',
-    margin: 12,
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    margin: 8,
     cursor: 'pointer',
-    fontWeight: 700,
+    fontWeight: 600,
     outline: 'none',
-    background: '#f3f4f6',
-    color: '#1e293b',
-    gap: 6
+    position: 'relative',
+    overflow: 'hidden',
+    gap: 8,
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.2)'
   },
-  dashboard: { background: '#e0e7ff', color: '#3730a3' },
-  vales: { background: '#d1fae5', color: '#047857' },
-  gastos: { background: '#fee2e2', color: '#b91c1c' },
-  crear: { background: '#fef9c3', color: '#b45309' },
-  aprobar: { background: '#f3e8ff', color: '#7c3aed' },
-  cuadre: { background: '#e0f2fe', color: '#0369a1' },
-  salir: { background: '#fff1f2', color: '#be123c', border: '2px solid #be123c' }
+  dashboard: { 
+    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+    color: '#ffffff'
+  },
+  vales: { 
+    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+    color: '#ffffff'
+  },
+  gastos: { 
+    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+    color: '#ffffff'
+  },
+  crear: { 
+    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+    color: '#ffffff'
+  },
+  aprobar: { 
+    background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+    color: '#ffffff'
+  },
+  cuadre: { 
+    background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+    color: '#ffffff'
+  },
+  salir: { 
+    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+    color: '#ffffff'
+  }
 };
 
 function HomeObento() {
-  const { rol, logout } = useAuth();
+  const { rol, logout, user } = useAuth();
   const navigate = useNavigate();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Actualizar la hora cada minuto
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Define los roles que pueden ver vales y gastos
   const rolesValesYGastos = ['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'];
+
+  // Función para obtener el saludo según la hora
+  const getSaludo = () => {
+    const hora = currentTime.getHours();
+    if (hora < 12) return '🌅 Buenos días';
+    if (hora < 18) return '☀️ Buenas tardes';
+    return '🌙 Buenas noches';
+  };
 
   const botones = [
     ...(rol === 'admin' ? [{
       icon: 'bi-speedometer2',
       label: 'Dashboard',
       to: '/dashboard',
-      style: buttonStyles.dashboard
+      style: buttonStyles.dashboard,
+      description: 'Análisis y métricas'
     }] : []),
     ...(rolesValesYGastos.includes(rol) ? [{
-      icon: 'bi-receipt',
-      label: 'Vales',
+      icon: 'bi-receipt-cutoff',
+      label: 'Vales de Servicio',
       to: '/vales-servicio',
-      style: buttonStyles.vales
+      style: buttonStyles.vales,
+      description: 'Registrar servicios'
     }] : []),
     ...(rolesValesYGastos.includes(rol) ? [{
-      icon: 'bi-cash-stack',
+      icon: 'bi-cash-coin',
       label: 'Gastos',
       to: '/vales-gasto',
-      style: buttonStyles.gastos
+      style: buttonStyles.gastos,
+      description: 'Gestionar gastos'
     }] : []),
     ...(rol === 'admin' ? [{
-      icon: 'bi-person-plus',
+      icon: 'bi-person-plus-fill',
       label: 'Crear Usuario',
       to: '/crear-usuario',
-      style: buttonStyles.crear
+      style: buttonStyles.crear,
+      description: 'Nuevos usuarios'
     }] : []),
     ...(rol === 'admin' || rol === 'anfitrion' ? [{
-      icon: 'bi-check2-square',
+      icon: 'bi-shield-check',
       label: 'Aprobar Vales',
       to: '/aprobar-vales-servicio',
-      style: buttonStyles.aprobar
+      style: buttonStyles.aprobar,
+      description: 'Revisar y aprobar'
     }] : []),
     ...(rol === 'admin' || rol === 'anfitrion' ? [{
       icon: 'bi-table',
-      label: 'Cuadre',
+      label: 'Cuadre Diario',
       to: '/cuadre-diario',
-      style: buttonStyles.cuadre
+      style: buttonStyles.cuadre,
+      description: 'Balance del día'
     }] : []),
     {
-      icon: 'bi-box-arrow-right',
-      label: 'Salir',
+      icon: 'bi-power',
+      label: 'Cerrar Sesión',
       action: logout,
-      style: buttonStyles.salir
+      style: buttonStyles.salir,
+      description: 'Salir del sistema'
     }
   ];
 
   return (
     <>
       <Row className="justify-content-center mt-4">
-        <Col xs={12} md={8} lg={6}>
-          <Card className="shadow-sm border-0" style={{borderRadius: 22, background: "#fff"}}>
-            <Card.Body>
-              <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 26, color: "#6366f1"}}>
-                <i className="bi bi-house-door me-2"></i>Bienvenido
+        <Col xs={12} md={10} lg={8}>
+          {/* Header con saludo personalizado */}
+          <Card className="shadow-sm border-0 mb-4" style={{
+            borderRadius: 24, 
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white'
+          }}>
+            <Card.Body className="text-center py-4">
+              <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+                {getSaludo()}
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 500, opacity: 0.9 }}>
+                {user?.email && `${user.email.split('@')[0]}`}
+              </div>
+              <Badge bg="light" text="dark" className="mt-2" style={{ 
+                fontSize: 14, 
+                fontWeight: 600,
+                textTransform: 'capitalize'
+              }}>
+                {rol}
+              </Badge>
+              <div style={{ fontSize: 14, marginTop: 8, opacity: 0.8 }}>
+                {currentTime.toLocaleDateString('es-ES', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </div>
+            </Card.Body>
+          </Card>
+
+          {/* Botones principales */}
+          <Card className="shadow-sm border-0" style={{
+            borderRadius: 24, 
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <Card.Body className="p-4">
+              <Card.Title className="mb-4 text-center" style={{
+                fontWeight: 700, 
+                letterSpacing: '-0.5px', 
+                fontSize: 24, 
+                color: '#1e293b'
+              }}>
+                <i className="bi bi-grid-3x3-gap me-2" style={{ color: '#6366f1' }}></i>
+                Panel de Control
               </Card.Title>
-              <div className="d-flex flex-wrap justify-content-center gap-3" style={{marginBottom: 10}}>
+              
+              <div className="d-flex flex-wrap justify-content-center gap-2" style={{ marginBottom: 10 }}>
                 {botones.map((btn, i) => (
-                  <button
-                    key={btn.label}
-                    type="button"
-                    style={{
-                      ...buttonStyles.base,
-                      ...btn.style
-                    }}
-                    onClick={() => btn.to ? navigate(btn.to) : btn.action()}
-                    onMouseOver={e => {
-                      e.currentTarget.style.transform = 'scale(1.07)';
-                      e.currentTarget.style.boxShadow = '0 4px 18px #0002';
-                    }}
-                    onMouseOut={e => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.boxShadow = buttonStyles.base.boxShadow;
-                    }}
-                  >
-                    <i className={`bi ${btn.icon}`} style={{fontSize: 40, marginBottom: 8}}></i>
-                    {btn.label}
-                  </button>
+                  <div key={btn.label} className="position-relative">
+                    <button
+                      type="button"
+                      style={{
+                        ...buttonStyles.base,
+                        ...btn.style
+                      }}
+                      onClick={() => btn.to ? navigate(btn.to) : btn.action()}
+                      onMouseOver={e => {
+                        e.currentTarget.style.transform = 'translateY(-4px) scale(1.02)';
+                        e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.15)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                        e.currentTarget.style.boxShadow = buttonStyles.base.boxShadow;
+                      }}
+                    >
+                      <i className={`bi ${btn.icon}`} style={{
+                        fontSize: 32, 
+                        marginBottom: 6,
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+                      }}></i>
+                      <div style={{ 
+                        fontWeight: 700,
+                        fontSize: 14,
+                        textAlign: 'center',
+                        lineHeight: 1.2
+                      }}>
+                        {btn.label}
+                      </div>
+                      <div style={{ 
+                        fontSize: 11,
+                        opacity: 0.8,
+                        textAlign: 'center',
+                        fontWeight: 500
+                      }}>
+                        {btn.description}
+                      </div>
+                    </button>
+                  </div>
                 ))}
               </div>
             </Card.Body>
@@ -182,37 +293,49 @@ function HomeObento() {
       </nav>
       <div className="bottom-spacer"></div>
 
-      {/* Versión */}
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          background: '#f8fafc',
-          borderRadius: 12,
-          boxShadow: '0 1px 6px #0001',
-          border: '1.5px solid #e5e7eb',
-          padding: '6px 18px',
-          fontWeight: 700,
-          fontSize: 16,
-          color: '#2563eb',
-          letterSpacing: '0.02em',
-          margin: '8px 0'
-        }}
-      >
-        <i className="bi bi-info-circle" style={{marginRight: 8, color: '#6366f1', fontSize: 18}}></i>
-        <span style={{marginRight: 6}}>Versión</span>
-        <span style={{
-          background: '#e0e7ef',
-          color: '#2563eb',
-          borderRadius: 8,
-          padding: '2px 10px',
-          fontWeight: 800,
-          fontSize: 15,
-          marginLeft: 4
-        }}>
-          v1.1.1
-        </span>
-      </div>
+      {/* Información adicional */}
+      <Row className="justify-content-center mt-3">
+        <Col xs={12} md={10} lg={8}>
+          <div className="d-flex justify-content-center align-items-center gap-3 flex-wrap">
+            {/* Versión */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+              borderRadius: 16,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+              padding: '8px 16px',
+              fontWeight: 600,
+              fontSize: 14,
+              color: '#475569'
+            }}>
+              <i className="bi bi-info-circle me-2" style={{ color: '#6366f1', fontSize: 16 }}></i>
+              <span className="me-2">Versión</span>
+              <Badge bg="primary" style={{ fontSize: 12, fontWeight: 700 }}>
+                v2.0.0
+              </Badge>
+            </div>
+
+            {/* Estado del sistema */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+              borderRadius: 16,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.2)',
+              padding: '8px 16px',
+              fontWeight: 600,
+              fontSize: 14,
+              color: '#059669'
+            }}>
+              <i className="bi bi-check-circle-fill me-2" style={{ color: '#10b981', fontSize: 16 }}></i>
+              Sistema Activo
+            </div>
+          </div>
+        </Col>
+      </Row>
     </>
   );
 }

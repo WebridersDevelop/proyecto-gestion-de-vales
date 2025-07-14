@@ -12,7 +12,7 @@ function ValesGasto() {
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
+  const [fechaFiltro, setFechaFiltro] = useState(''); // Inicia vacío para mostrar todos
   const conceptoRef = useRef(null);
   const valorRef = useRef(null);
 
@@ -27,23 +27,38 @@ function ValesGasto() {
   }, [user]);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !rol) return;
     setLoading(true);
+    
+    console.log('📊 ValesGasto - Consultando vales para usuario:', user.uid, 'rol:', rol);
+    
     const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
       const vales = [];
+      console.log('📊 ValesGasto - Total documentos en colección:', snap.size);
+      
       snap.forEach(docu => {
         const data = docu.data();
-        // Mostrar todos los vales si es admin, solo los propios si no
-        if (
-          rol === 'admin' ||
-          rol === 'anfitrion'
-        ) {
-          vales.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        console.log('📊 ValesGasto - Procesando vale:', docu.id, data);
+        
+        // Determinar si mostrar el vale según el rol
+        let mostrarVale = false;
+        
+        if (['admin', 'anfitrion'].includes(rol)) {
+          // Admin y anfitrion ven todos los vales de gasto
+          mostrarVale = true;
+          console.log('📊 ValesGasto - Usuario admin/anfitrion, mostrando vale:', docu.id);
+        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
+          // Barberos, estilistas y estetica ven sus propios vales de gasto
+          mostrarVale = (data.peluqueroUid === user.uid);
+          console.log('📊 ValesGasto - Comparando UIDs:', {
+            dataUID: data.peluqueroUid,
+            userUID: user.uid,
+            coincide: mostrarVale,
+            valeId: docu.id
           });
-        } else if (data.peluqueroUid === user.uid) {
+        }
+        
+        if (mostrarVale) {
           vales.push({
             ...data,
             id: docu.id,
@@ -51,12 +66,14 @@ function ValesGasto() {
           });
         }
       });
+      
+      console.log('📊 ValesGasto - Vales filtrados encontrados:', vales.length);
       vales.sort((a, b) => b.fecha - a.fecha);
       setValesUsuario(vales);
       setLoading(false);
     });
     return () => unsub();
-  }, [user, mensaje, rol]);
+  }, [user?.uid, rol, mensaje]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -129,15 +146,22 @@ function ValesGasto() {
     }
   };
 
-  // Filtro por fecha seleccionada
-  const valesFiltrados = valesUsuario.filter(vale => {
-    if (!vale.fecha || !(vale.fecha instanceof Date)) return false;
-    const yyyy = vale.fecha.getFullYear();
-    const mm = String(vale.fecha.getMonth() + 1).padStart(2, '0');
-    const dd = String(vale.fecha.getDate()).padStart(2, '0');
-    const fechaVale = `${yyyy}-${mm}-${dd}`;
-    return fechaVale === fechaFiltro;
-  });
+  // Filtrar vales por fecha (si se especifica una fecha)
+  const valesFiltrados = fechaFiltro 
+    ? valesUsuario.filter(vale => {
+        const fechaVale = vale.fecha.toISOString().slice(0, 10);
+        return fechaVale === fechaFiltro;
+      })
+    : valesUsuario; // Si no hay filtro de fecha, mostrar todos
+
+  // Calcular métricas del día (solo si hay filtro de fecha específico)
+  const acumuladoDia = fechaFiltro
+    ? valesFiltrados
+        .filter(v => v.estado === 'aprobado')
+        .reduce((acc, v) => acc + (Number(v.valor) || 0), 0)
+    : valesFiltrados
+        .filter(v => v.estado === 'aprobado')
+        .reduce((acc, v) => acc + (Number(v.valor) || 0), 0);
 
   // Cambia aquí la lógica de acceso para los nuevos roles
   if (
@@ -147,280 +171,483 @@ function ValesGasto() {
   }
 
   return (
-    <div className="container">
-      <Row className="justify-content-center mt-4">
+    <div className="vales-gasto-container" style={{
+      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+      minHeight: '100vh',
+      padding: '20px 10px 140px 10px'
+    }}>
+      <Row className="justify-content-center">
         <Col xs={12} md={10} lg={8} xl={7}>
-          <Card className="shadow-sm border-0" style={{borderRadius: 18}}>
-            <Card.Body>
-              <Card.Title className="mb-4 text-center" style={{fontWeight: 700, letterSpacing: '-1px', fontSize: 24, color: "#ef4444"}}>
-                <i className="bi bi-cash-stack me-2"></i>Vales de Gasto
-              </Card.Title>
-              {user && (
-                <div style={{textAlign: 'center', marginBottom: 18, fontWeight: 500, color: "#444"}}>
-                  <span style={{background: "#f3f4f6", borderRadius: 8, padding: "4px 14px"}}>
-                    <i className="bi bi-person-circle me-1"></i>
-                    {nombreActual}
-                  </span>
-                </div>
-              )}
-              {(['barbero', 'estilista', 'estetica', 'admin', 'anfitrion'].includes(rol)) && (
-                <Form onSubmit={handleSubmit} className="mb-4 p-3" style={{background: "#f9fafb", borderRadius: 12, boxShadow: "0 1px 8px #0001"}}>
-                  <Row className="g-3">
-                    <Col xs={12} md={7}>
-                      <Form.Group controlId="concepto">
-                        <Form.Label>Concepto</Form.Label>
-                        <Form.Control
-                          type="text"
-                          placeholder="Ej: Compra de insumos"
-                          value={concepto}
-                          onChange={e => setConcepto(e.target.value)}
-                          autoFocus
-                          ref={conceptoRef}
-                        />
-                      </Form.Group>
-                    </Col>
-                    <Col xs={12} md={5}>
-                      <Form.Group controlId="valor">
-                        <Form.Label>Valor</Form.Label>
-                        <Form.Control
-                          type="number"
-                          placeholder="Ej: 5000"
-                          value={valor}
-                          onChange={e => setValor(e.target.value)}
-                          min={1}
-                          ref={valorRef}
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
-                  <div className="d-grid mt-3">
-                    <Button variant="danger" type="submit" disabled={loading}>
-                      {loading ? <Spinner size="sm" animation="border" /> : <><i className="bi bi-plus-circle me-1"></i>Enviar Vale de Gasto</>}
-                    </Button>
+          <Card className="shadow-sm border-0" style={{
+            borderRadius: 24,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            overflow: 'hidden'
+          }}>
+            <Card.Body className="p-0">
+              {/* Header modernizado */}
+              <div style={{
+                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                padding: '24px',
+                color: 'white'
+              }}>
+                <div className="d-flex align-items-center justify-content-between">
+                  <div>
+                    <h4 className="mb-1 fw-bold" style={{ fontSize: '1.4rem' }}>
+                      <i className="bi bi-cash-stack me-2"></i>
+                      Vales de Gasto
+                    </h4>
+                    <p className="mb-0 opacity-90" style={{ fontSize: '0.95rem' }}>
+                      {['admin', 'anfitrion'].includes(rol) 
+                        ? 'Gestiona todos los vales de gasto' 
+                        : 'Registra tus gastos operativos'
+                      }
+                    </p>
                   </div>
-                  {mensaje && (
-                    <Alert className="mt-3 mb-0" variant={mensaje.startsWith('¡') ? 'success' : 'danger'}>
-                      {mensaje}
-                    </Alert>
-                  )}
-                </Form>
-              )}
-              {user && (
-                <>
-                  <hr />
-                  <h5 className="mb-3" style={{fontWeight: 600, color: "#ef4444"}}>
-                    <i className="bi bi-list-ul me-2"></i>Mis vales de gasto enviados
-                  </h5>
-                  {/* Selector de fecha */}
-                  <Form.Group className="mb-3" controlId="fechaFiltro">
-                    <Form.Label>Filtrar por fecha</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={fechaFiltro}
-                      max={getHoyLocal()}
-                      onChange={e => setFechaFiltro(e.target.value)}
-                      style={{maxWidth: 200}}
-                    />
-                  </Form.Group>
-                  {/* Acumulado del día */}
-                  {valesFiltrados.length > 0 && (
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 17,
-                        color: "#ef4444",
-                        marginBottom: 10,
-                        textAlign: "right"
-                      }}
-                    >
-                      Acumulado del día (aprobados): ${valesFiltrados
-                        .filter(v => v.estado === 'aprobado')
-                        .reduce((acc, v) => acc + (Number(v.valor) || 0), 0)
-                        .toLocaleString()}
+                  <div className="text-end">
+                    <div style={{ 
+                      background: 'rgba(255,255,255,0.15)', 
+                      padding: '8px 12px', 
+                      borderRadius: '8px',
+                      backdropFilter: 'blur(10px)'
+                    }}>
+                      <small className="d-block opacity-90">
+                        {fechaFiltro ? `Registros del ${fechaFiltro}` : 'Total registros'}
+                      </small>
+                      <strong style={{ fontSize: '1.2rem' }}>{valesFiltrados.length}</strong>
                     </div>
-                  )}
-                  {/* Tabla para pantallas medianas y grandes */}
-                  <div className="d-none d-md-block" style={{overflowX: 'auto'}}>
-                    <Table striped bordered hover size="sm" responsive="md" className="mb-0" style={{borderRadius: 12, overflow: 'hidden'}}>
-                      <thead style={{background: "#f3f4f6"}}>
-                        <tr>
-                          <th>Código</th>
-                          <th>Fecha</th>
-                          <th>Hora</th>
-                          <th>Concepto</th>
-                          <th>Valor</th>
-                          <th>Estado</th>
-                          <th>Aprobado por</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {valesFiltrados.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="text-center text-muted">No tienes vales de gasto enviados para esta fecha.</td>
-                          </tr>
-                        ) : (
-                          valesFiltrados.map(vale => (
-                            <tr
-                              key={vale.id}
-                              style={{
-                                borderLeft: `6px solid ${
-                                  vale.estado === 'aprobado'
-                                    ? '#22c55e'
-                                    : vale.estado === 'rechazado'
-                                    ? '#ef4444'
-                                    : '#f59e0b'
-                                }`,
-                                background: vale.estado === 'rechazado'
-                                  ? '#fef2f2'
-                                  : vale.estado === 'aprobado'
-                                  ? '#f0fdf4'
-                                  : '#fffbeb',
-                                fontWeight: 500,
-                                fontSize: 15,
-                              }}
-                            >
-                              <td style={{ fontWeight: 700, color: '#ef4444', background: '#f3f4f6' }}>
-                                {vale.codigo || 'G-000'}
-                              </td>
-                              <td>{vale.fecha.toLocaleDateString()}</td>
-                              <td>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td style={{ fontWeight: 600, color: '#374151' }}>{vale.concepto}</td>
-                              <td style={{ fontWeight: 700, color: '#ef4444' }}>
-                                ${Number(vale.valor).toLocaleString()}
-                              </td>
-                              <td>
-                                <Badge
-                                  bg={
-                                    vale.estado === 'aprobado'
-                                      ? 'success'
-                                      : vale.estado === 'rechazado'
-                                      ? 'danger'
-                                      : 'warning'
-                                  }
-                                  text={vale.estado === 'pendiente' ? 'dark' : undefined}
-                                  style={{ fontSize: '0.8rem' }}
-                                >
-                                  {vale.estado === 'aprobado'
-                                    ? 'OK'
-                                    : vale.estado === 'rechazado'
-                                    ? 'NO'
-                                    : 'Pend.'}
-                                </Badge>
-                              </td>
-                              <td>
-                                {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#16a34a', fontWeight: 700 }}>
-                                    <i className="bi bi-check-circle" style={{ marginRight: 4 }}></i>
-                                    {vale.aprobadoPor}
-                                  </span>
-                                ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#ef4444', fontWeight: 700 }}>
-                                    <i className="bi bi-x-circle" style={{ marginRight: 4 }}></i>
-                                    {vale.aprobadoPor}
-                                  </span>
-                                ) : (
-                                  <span className="text-secondary">-</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </Table>
                   </div>
+                </div>
+              </div>
 
-                  {/* Vista optimizada para móviles - Lista compacta */}
-                  <div className="d-block d-md-none">
-                    {valesFiltrados.length === 0 ? (
-                      <div className="text-center text-muted py-4">
-                        <i className="bi bi-inbox" style={{ fontSize: '2rem', opacity: 0.5 }}></i>
-                        <p className="mb-0" style={{ fontSize: '1.1rem' }}>
-                          No tienes vales de gasto enviados para esta fecha.
-                        </p>
-                      </div>
-                    ) : (
-                      valesFiltrados.map(vale => (
-                        <div
-                          key={vale.id}
-                          className="mb-3"
-                          style={{
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            boxShadow: "0 1px 8px #0001",
-                            background: vale.estado === 'rechazado'
-                              ? '#fef2f2'
-                              : vale.estado === 'aprobado'
-                                ? '#f0fdf4'
-                                : '#fffbeb',
-                            borderLeft: `6px solid ${
-                              vale.estado === 'aprobado'
-                                ? '#22c55e'
-                                : vale.estado === 'rechazado'
-                                ? '#ef4444'
-                                : '#f59e0b'
-                            }`
+              {/* Formulario modernizado */}
+              {(['barbero', 'estilista', 'estetica', 'admin', 'anfitrion'].includes(rol)) && (
+                <div style={{ padding: '24px' }}>
+                  <Form onSubmit={handleSubmit}>
+                    <Row className="g-3">
+                      <Col md={7}>
+                        <Form.Group>
+                          <Form.Label style={{ 
+                            fontWeight: 600, 
+                            color: '#374151', 
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            marginBottom: '8px'
+                          }}>
+                            <i className="bi bi-receipt me-2 text-danger"></i>
+                            Concepto del Gasto
+                          </Form.Label>
+                          <Form.Control
+                            ref={conceptoRef}
+                            type="text"
+                            value={concepto}
+                            onChange={(e) => setConcepto(e.target.value)}
+                            placeholder="Ej: Compra de insumos, materiales..."
+                            disabled={loading}
+                            style={{
+                              border: '2px solid #e2e8f0',
+                              borderRadius: '12px',
+                              padding: '12px 16px',
+                              fontSize: '0.95rem',
+                              transition: 'all 0.2s ease',
+                              backgroundColor: '#f8fafc'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#ef4444'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={5}>
+                        <Form.Group>
+                          <Form.Label style={{ 
+                            fontWeight: 600, 
+                            color: '#374151', 
+                            fontSize: '0.9rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            marginBottom: '8px'
+                          }}>
+                            <i className="bi bi-currency-dollar me-2 text-danger"></i>
+                            Valor del Gasto
+                          </Form.Label>
+                          <Form.Control
+                            ref={valorRef}
+                            type="number"
+                            value={valor}
+                            onChange={(e) => setValor(e.target.value)}
+                            placeholder="0"
+                            disabled={loading}
+                            min={1}
+                            style={{
+                              border: '2px solid #e2e8f0',
+                              borderRadius: '12px',
+                              padding: '12px 16px',
+                              fontSize: '0.95rem',
+                              transition: 'all 0.2s ease',
+                              backgroundColor: '#f8fafc'
+                            }}
+                            onFocus={(e) => e.target.style.borderColor = '#ef4444'}
+                            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    
+                    <div className="mt-4 d-flex gap-3 align-items-center">
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        style={{
+                          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '12px 24px',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
+                          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.target.style.transform = 'translateY(-1px)'}
+                        onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                      >
+                        {loading ? (
+                          <>
+                            <Spinner size="sm" className="me-2" />
+                            Procesando...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-plus-circle me-2"></i>
+                            Registrar Vale de Gasto
+                          </>
+                        )}
+                      </Button>
+                      
+                      {mensaje && (
+                        <Alert 
+                          variant={mensaje.includes('Error') || mensaje.includes('Error') ? 'danger' : 'success'} 
+                          className="mb-0 py-2 px-3 flex-1"
+                          style={{ 
+                            borderRadius: '8px',
+                            fontSize: '0.9rem',
+                            border: 'none'
                           }}
                         >
-                          <div className="d-flex justify-content-between align-items-center" style={{ padding: '12px 16px', background: '#f3f4f6' }}>
-                            <div>
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Código:</span>
-                              <span style={{ fontWeight: 700, color: '#ef4444', fontSize: '1.1rem', marginLeft: 6 }}>
-                                {vale.codigo || 'G-000'}
-                              </span>
-                            </div>
-                            <span className={`badge ${
-                              vale.estado === 'aprobado'
-                                ? 'bg-success'
-                                : vale.estado === 'rechazado'
-                                ? 'bg-danger'
-                                : 'bg-warning text-dark'
-                            }`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                              {vale.estado === 'aprobado'
-                                ? 'Aprobado'
-                                : vale.estado === 'rechazado'
-                                ? 'Rechazado'
-                                : 'Pendiente'}
-                            </span>
+                          {mensaje}
+                        </Alert>
+                      )}
+                    </div>
+                  </Form>
+                </div>
+              )}
+
+              {/* Filtros y resumen del día */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)', 
+                padding: '20px 24px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <Row className="g-3 align-items-center">
+                  <Col md={4}>
+                    <Form.Group className="mb-0">
+                      <Form.Label style={{ 
+                        fontWeight: 600, 
+                        color: '#374151', 
+                        fontSize: '0.9rem',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <i className="bi bi-calendar3 me-2 text-danger"></i>
+                        Filtrar por fecha
+                      </Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={fechaFiltro}
+                        onChange={(e) => setFechaFiltro(e.target.value)}
+                        placeholder="Seleccionar fecha..."
+                        style={{
+                          border: '2px solid #cbd5e1',
+                          borderRadius: '10px',
+                          padding: '8px 12px',
+                          fontSize: '0.9rem',
+                          backgroundColor: 'white'
+                        }}
+                      />
+                      {fechaFiltro && (
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => setFechaFiltro('')}
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          <i className="bi bi-x-circle me-1"></i>
+                          Mostrar todos
+                        </Button>
+                      )}
+                    </Form.Group>
+                  </Col>
+                  <Col md={8}>
+                    <Row className="g-2">
+                      <Col xs={6} md={4}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #93c5fd'
+                        }}>
+                          <div style={{ color: '#1e40af', fontSize: '0.8rem', fontWeight: 500 }}>
+                            Registros
                           </div>
-                          <div style={{ padding: '16px', borderTop: '1px solid #e0e7ef' }}>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Fecha:</span>
-                              <span style={{ fontWeight: 600, color: '#374151', fontSize: '1rem', marginLeft: 6 }}>
-                                {vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Concepto:</span>
-                              <span style={{ fontWeight: 600, color: '#ef4444', fontSize: '1rem', marginLeft: 6 }}>
-                                {vale.concepto}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Valor:</span>
-                              <span style={{ fontWeight: 700, color: '#ef4444', fontSize: '1.1rem', marginLeft: 6 }}>
-                                ${Number(vale.valor).toLocaleString()}
-                              </span>
-                            </div>
-                            <div>
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Aprobado por:</span>
-                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#22c55e', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
-                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
-                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : (
-                                <span className="text-secondary" style={{ marginLeft: 6 }}>-</span>
-                              )}
-                            </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e3a8a' }}>
+                            {valesFiltrados.length}
                           </div>
                         </div>
-                      ))
-                    )}
+                      </Col>
+                      <Col xs={6} md={4}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #f87171'
+                        }}>
+                          <div style={{ color: '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
+                            {fechaFiltro ? 'Gastos del día' : 'Total gastos'}
+                          </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#7f1d1d' }}>
+                            ${acumuladoDia.toLocaleString()}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #d1d5db'
+                        }}>
+                          <div style={{ color: '#374151', fontSize: '0.8rem', fontWeight: 500 }}>
+                            Pendientes
+                          </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#111827' }}>
+                            {valesFiltrados.filter(v => v.estado === 'pendiente').length}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </Col>
+                </Row>
+              </div>
+              {/* Lista de vales modernizada */}
+              {loading ? (
+                <div className="text-center py-5">
+                  <Spinner animation="border" style={{ color: '#ef4444' }} />
+                  <p className="mt-3 text-muted">Cargando vales...</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    padding: '16px 24px',
+                    borderTop: '1px solid #e2e8f0'
+                  }}>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h6 className="mb-0" style={{ 
+                        fontWeight: 600, 
+                        color: '#374151',
+                        fontSize: '1rem'
+                      }}>
+                        <i className="bi bi-list-ul me-2 text-danger"></i>
+                        {['admin', 'anfitrion'].includes(rol) 
+                          ? (fechaFiltro ? `Todos los vales del ${fechaFiltro}` : 'Todos los vales')
+                          : (fechaFiltro ? `Tus vales del ${fechaFiltro}` : 'Todos tus vales')
+                        }
+                      </h6>
+                      <span style={{ 
+                        background: '#ef4444', 
+                        color: 'white', 
+                        padding: '4px 12px', 
+                        borderRadius: '12px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600
+                      }}>
+                        {valesFiltrados.length} registros
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ padding: '0 12px 24px 12px' }}>
+                    {/* Tabla compacta para todas las pantallas */}
+                    <div style={{ 
+                      overflowX: 'auto', 
+                      borderRadius: '12px', 
+                      border: '1px solid #e2e8f0',
+                      background: '#fff'
+                    }}>
+                      <Table className="mb-0" style={{ 
+                        fontSize: '0.8rem',
+                        background: '#fff',
+                        minWidth: '100%'
+                      }}>
+                        <thead style={{ backgroundColor: '#f8fafc' }}>
+                          <tr>
+                            {/* Columnas adaptativas según el tamaño de pantalla */}
+                            <th className="d-none d-md-table-cell" style={{padding: '8px 12px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Código</th>
+                            {['admin', 'anfitrion'].includes(rol) && (
+                              <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Usuario</th>
+                            )}
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Concepto</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Valor</th>
+                            <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Fecha</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Hora</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Estado</th>
+                            <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Aprobado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {valesFiltrados.length === 0 ? (
+                            <tr>
+                              <td colSpan={['admin', 'anfitrion'].includes(rol) ? 8 : 7} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
+                                <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
+                                {fechaFiltro 
+                                  ? `No hay vales para la fecha ${fechaFiltro}.`
+                                  : 'No hay vales registrados.'
+                                }
+                              </td>
+                            </tr>
+                          ) : (
+                            valesFiltrados.map(vale => (
+                              <tr key={vale.id} style={{ 
+                                borderBottom: '1px solid #f1f5f9',
+                                borderLeft: `3px solid ${
+                                  vale.estado === 'aprobado' ? '#22c55e' 
+                                  : vale.estado === 'rechazado' ? '#dc3545' 
+                                  : '#f59e42'
+                                }`
+                              }}>
+                                {/* Código - Solo en pantallas md+ */}
+                                <td className="d-none d-md-table-cell" style={{padding: '8px 12px'}}>
+                                  <strong style={{ color: '#ef4444', fontSize: '0.8rem' }}>
+                                    {vale.codigo || 'G-000'}
+                                  </strong>
+                                </td>
+                                
+                                {/* Usuario - Solo para admin/anfitrion en pantallas lg+ */}
+                                {['admin', 'anfitrion'].includes(rol) && (
+                                  <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
+                                    <span style={{ 
+                                      color: '#059669', 
+                                      fontWeight: 600, 
+                                      fontSize: '0.75rem' 
+                                    }}>
+                                      {vale.peluqueroNombre || 'Sin nombre'}
+                                    </span>
+                                  </td>
+                                )}
+                                
+                                {/* Concepto - Siempre visible pero más compacto en móvil */}
+                                <td style={{padding: '8px 6px', color: '#374151', maxWidth: '120px'}}>
+                                  <div style={{ 
+                                    whiteSpace: 'nowrap', 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis',
+                                    fontWeight: 500,
+                                    fontSize: '0.8rem'
+                                  }}>
+                                    {vale.concepto}
+                                  </div>
+                                  {/* En móvil, mostrar código debajo del concepto */}
+                                  <div className="d-md-none" style={{ 
+                                    fontSize: '0.7rem', 
+                                    color: '#ef4444', 
+                                    fontWeight: 600 
+                                  }}>
+                                    {vale.codigo || 'G-000'}
+                                  </div>
+                                </td>
+                                
+                                {/* Valor - Siempre visible */}
+                                <td style={{padding: '8px 6px', fontWeight: 600, color: '#ef4444', fontSize: '0.8rem'}}>
+                                  ${Number(vale.valor)?.toLocaleString()}
+                                </td>
+                                
+                                {/* Fecha - Solo en pantallas sm+ */}
+                                <td className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontSize: '0.75rem', color: '#64748b'}}>
+                                  {vale.fecha.toLocaleDateString('es-ES', { 
+                                    day: '2-digit', 
+                                    month: '2-digit' 
+                                  })}
+                                </td>
+                                
+                                {/* Hora - Siempre visible */}
+                                <td style={{padding: '8px 6px', fontSize: '0.75rem', color: '#64748b'}}>
+                                  <strong style={{ color: '#ef4444', fontSize: '0.75rem' }}>
+                                    {vale.fecha.toLocaleTimeString('es-ES', { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </strong>
+                                  {/* En móvil, mostrar fecha debajo de la hora */}
+                                  <div className="d-sm-none" style={{ 
+                                    fontSize: '0.65rem', 
+                                    color: '#64748b', 
+                                    marginTop: '2px' 
+                                  }}>
+                                    {vale.fecha.toLocaleDateString('es-ES', { 
+                                      day: '2-digit', 
+                                      month: '2-digit' 
+                                    })}
+                                  </div>
+                                </td>
+                                
+                                {/* Estado - Siempre visible */}
+                                <td style={{padding: '8px 6px'}}>
+                                  <span className={`badge ${
+                                    vale.estado === 'aprobado'
+                                      ? 'bg-success'
+                                      : vale.estado === 'rechazado'
+                                      ? 'bg-danger'
+                                      : 'bg-warning text-dark'
+                                  }`} style={{ 
+                                    fontSize: '0.65rem', 
+                                    fontWeight: 600, 
+                                    padding: '3px 6px',
+                                    borderRadius: '4px'
+                                  }}>
+                                    {vale.estado === 'aprobado' ? 'OK' 
+                                     : vale.estado === 'rechazado' ? 'X' 
+                                     : 'P'}
+                                  </span>
+                                </td>
+                                
+                                {/* Aprobado por - Solo en pantallas lg+ */}
+                                <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
+                                  {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.75rem' }}>
+                                      <i className="bi bi-check-circle" style={{marginRight: 2}}></i>
+                                      {vale.aprobadoPor.substring(0, 8)}...
+                                    </span>
+                                  ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#dc3545', fontWeight: 600, fontSize: '0.75rem' }}>
+                                      <i className="bi bi-x-circle" style={{marginRight: 2}}></i>
+                                      {vale.aprobadoPor.substring(0, 8)}...
+                                    </span>
+                                  ) : (
+                                    <span className="text-secondary" style={{ fontSize: '0.75rem' }}>-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </Table>
+                    </div>
                   </div>
                 </>
               )}

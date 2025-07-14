@@ -27,7 +27,6 @@ function AprobarValesServicio() {
   const [busqueda, setBusqueda] = useState('');
   const [valesSeleccionados, setValesSeleccionados] = useState([]);
   const [showMasivo, setShowMasivo] = useState(false);
-  const [comisionExtra, setComisionExtra] = useState('');
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
@@ -113,7 +112,6 @@ function AprobarValesServicio() {
     setFormaPago('');
     setLocal('');
     setDividirPorDos('100'); // reset selector
-    setComisionExtra(vale.comisionExtra ? String(vale.comisionExtra) : ''); // inicializar comisión como string
     setShowModal(true);
   };
 
@@ -137,7 +135,7 @@ function AprobarValesServicio() {
           formaPago,
           ...(valeActual.tipo === 'servicio' ? {
             dividirPorDos, // Guarda el porcentaje seleccionado
-            comisionExtra: Number(comisionExtra) || 0
+            comisionExtra: Number(valeActual.comisionExtra) || 0
           } : {})
         } : {})
       });
@@ -664,10 +662,7 @@ function AprobarValesServicio() {
                 {valeActual.tipo === 'servicio' ? 'Vale de Servicio' : 'Vale de Gasto'}
               </div>
               <div><strong>Concepto:</strong> {valeActual.servicio || valeActual.concepto}</div>
-              <div><strong>Valor base:</strong> ${Number(valeActual.valor).toLocaleString()}</div>
-              {valeActual.comisionExtra && Number(valeActual.comisionExtra) > 0 && (
-                <div><strong>Comisión actual:</strong> ${Number(valeActual.comisionExtra).toLocaleString()}</div>
-              )}
+              <div><strong>Valor:</strong> ${Number(valeActual.valor).toLocaleString()}</div>
               <div><strong>Profesional:</strong> {valeActual.peluqueroNombre || valeActual.peluqueroEmail}</div>
             </Alert>
           )}
@@ -726,63 +721,17 @@ function AprobarValesServicio() {
                         <option value="45">📊 Dividir 45/55 (45% profesional, 55% empresa)</option>
                       </Form.Select>
                     </Form.Group>
-
-                    <Form.Group className="mb-3">
-                      <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
-                        <i className="bi bi-plus-circle me-2"></i>
-                        Comisión Extra (opcional)
-                      </Form.Label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{
-                          position: 'absolute',
-                          left: 12,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          color: '#6b7280',
-                          fontWeight: 600,
-                          zIndex: 1
-                        }}>$</span>
-                        <Form.Control
-                          type="number"
-                          min={0}
-                          value={comisionExtra}
-                          onChange={e => setComisionExtra(e.target.value)}
-                          placeholder="0"
-                          style={{ 
-                            borderRadius: 12,
-                            paddingLeft: 28,
-                            fontWeight: 600
-                          }}
-                        />
-                      </div>
-                      <Form.Text style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                        <i className="bi bi-info-circle me-1"></i>
-                        Esta comisión se suma al valor total y no se divide
-                      </Form.Text>
-                    </Form.Group>
                     
-                    {(dividirPorDos !== '100' || (comisionExtra && Number(comisionExtra) > 0)) && (
+                    {dividirPorDos !== '100' && (
                       <Alert variant="info" style={{ borderRadius: 12, margin: 0 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                          💰 Cálculo detallado del vale:
-                        </div>
-                        <div style={{ marginBottom: 4 }}>
-                          <strong>Valor base:</strong> ${Number(valeActual.valor).toLocaleString()}
-                        </div>
-                        {comisionExtra && Number(comisionExtra) > 0 && (
-                          <div style={{ marginBottom: 4 }}>
-                            <strong>Comisión extra:</strong> ${Number(comisionExtra).toLocaleString()}
-                          </div>
-                        )}
-                        <hr style={{ margin: '8px 0', opacity: 0.3 }} />
-                        <div style={{ marginBottom: 4 }}>
-                          👤 <strong>Profesional recibe:</strong> ${(((Number(valeActual.valor) * Number(dividirPorDos)) / 100) + (Number(comisionExtra) || 0)).toLocaleString()}
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                          💰 Distribución del vale:
                         </div>
                         <div>
-                          🏢 <strong>Empresa recibe:</strong> ${((Number(valeActual.valor) * (100 - Number(dividirPorDos))) / 100).toLocaleString()}
+                          👤 Profesional: <strong>{dividirPorDos}%</strong> = ${((Number(valeActual.valor) * Number(dividirPorDos)) / 100).toLocaleString()}
                         </div>
-                        <div style={{ marginTop: 8, fontWeight: 700, color: '#059669' }}>
-                          🎯 <strong>Total vale:</strong> ${(Number(valeActual.valor) + (Number(comisionExtra) || 0)).toLocaleString()}
+                        <div>
+                          🏢 Empresa: <strong>{100 - Number(dividirPorDos)}%</strong> = ${((Number(valeActual.valor) * (100 - Number(dividirPorDos))) / 100).toLocaleString()}
                         </div>
                       </Alert>
                     )}

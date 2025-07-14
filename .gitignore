@@ -27,4 +27,24 @@ dist-ssr
 *.sln
 *.sw?
 
+# Backup and temporary files
+*_backup.*
+*_OLD.*
+*.backup
+*.bak
+*.tmp
+*.temp
+~*
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+
+# Vercel
 .vercel
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*

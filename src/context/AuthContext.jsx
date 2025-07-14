@@ -13,6 +13,7 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [rol, setRol] = useState(null);
+  const [nombre, setNombre] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -20,13 +21,17 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       setRol(null);
+      setNombre(null);
       if (firebaseUser) {
         const docRef = doc(db, "usuarios", firebaseUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setRol(docSnap.data().rol);
+          const userData = docSnap.data();
+          setRol(userData.rol || "");
+          setNombre(userData.nombre || "Usuario sin nombre");
         } else {
           setRol(""); // No tiene documento de rol
+          setNombre("Usuario sin nombre");
         }
       }
       setLoading(false);
@@ -46,7 +51,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, rol, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, rol, nombre, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

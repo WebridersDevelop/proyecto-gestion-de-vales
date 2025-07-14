@@ -12,6 +12,11 @@ body, html, #root {
   overflow-y: auto;
 }
 
+/* Espaciado universal para evitar que el menú tape el contenido */
+body {
+  padding-bottom: 120px;
+}
+
 /* Contenedor principal */
 .container {
   background: #fff;
@@ -27,7 +32,15 @@ body, html, #root {
 
 /* Asegura que el contenido principal no quede tapado por el menú inferior */
 .container, .main-content, .page-content, .cuadre-diario-container {
-  padding-bottom: 160px !important; /* Aumentado para dejar más espacio al menú inferior */
+  padding-bottom: 140px !important; /* Aumentado para el menú más alto + espacio extra */
+}
+
+/* Asegurar espaciado en todas las páginas */
+.page-container, 
+[class*="container"], 
+.row:last-child,
+.col:last-child > .card:last-child {
+  margin-bottom: 20px;
 }
 
 /* Botones */
@@ -158,31 +171,33 @@ h2, h4 {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #fff;
-  border-top: 1px solid #e0e0e0;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-top: 2px solid rgba(59, 130, 246, 0.1);
   z-index: 1000;
-  height: 90px;
-  min-height: 90px;
+  height: 108px;
+  min-height: 108px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
-  padding: 0;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.12);
+  padding: 12px 16px 0;
+  backdrop-filter: blur(10px);
 }
 
 /* Contenedor interno para scroll horizontal */
 .bottom-nav-inner {
   width: 100%;
+  max-width: 600px;
   display: flex;
-  align-items: flex-start;   /* Alinea arriba */
+  align-items: flex-start;
   justify-content: space-around;
-  height: 64px;             /* Menos alto que la barra */
+  height: 74px;
   margin-top: 0;
   margin-bottom: 0;
   overflow-x: auto;
-  overflow-y: hidden;
-  gap: 0;
-  padding: 0;
+  overflow-y: visible;
+  gap: 6px;
+  padding: 0 8px;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -196,81 +211,188 @@ h2, h4 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  color: #444;
+  justify-content: center;
+  color: #64748b;
   text-decoration: none;
-  background: none;
-  border: none;
-  font-size: 0.95rem;
-  padding-top: 6px;
-  padding-bottom: 0;
-  transition: color 0.2s, background 0.2s;
-  border-radius: 0;
-  height: 64px;           /* Igual que el contenedor interno */
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(148, 163, 184, 0.2);
+  font-size: 0.85rem;
+  padding: 10px 4px 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
   outline: none;
   min-width: 60px;
-  max-width: 90px;
+  max-width: 80px;
+  height: 68px;
+  position: relative;
+  overflow: visible;
+  z-index: 1;
 }
 
 .bottom-nav-link i {
-  font-size: 1.45rem;
+  font-size: 1.3rem;
   margin-bottom: 2px;
   display: block;
+  transition: all 0.3s ease;
 }
 
 .bottom-nav-link span {
-  font-size: 0.78rem;
-  font-weight: 500;
-  line-height: 1.1;
-  margin-top: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  margin-top: 1px;
   text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  width: auto;
+  min-width: 100%;
   display: block;
   letter-spacing: 0.01em;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.8);
+  position: relative;
+  z-index: 2;
 }
 
-/* Ítem activo: negro y negrita */
+/* Ajuste especial para textos más largos */
+.bottom-nav-link:hover span,
+.bottom-nav-link.active span {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  width: auto;
+  min-width: max-content;
+}
+
+@media (max-width: 600px) {
+  .bottom-nav-link:hover span,
+  .bottom-nav-link.active span {
+    font-size: 0.68rem;
+  }
+}
+
+/* Ítems activos y hover con gradientes */
 .bottom-nav-link.active,
 .bottom-nav-link:focus,
 .bottom-nav-link:hover {
-  color: #111;
+  color: white;
   font-weight: 700;
-  background: none;
+  background: linear-gradient(135deg, var(--nav-color, #3b82f6) 0%, color-mix(in srgb, var(--nav-color, #3b82f6) 80%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--nav-color, #3b82f6) 30%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--nav-color, #3b82f6) 25%, transparent);
+  z-index: 10;
 }
 
 .bottom-nav-link.active i,
 .bottom-nav-link:focus i,
 .bottom-nav-link:hover i {
-  color: #111;
+  color: white;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
 }
 
 .bottom-nav-link.active span,
 .bottom-nav-link:focus span,
 .bottom-nav-link:hover span {
-  color: #111;
+  color: white;
   font-weight: 700;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Animación de pulso para elementos activos */
+.bottom-nav-link.active::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  animation: pulse 2s infinite;
+}
+
+/* Efectos adicionales para mejorar la experiencia */
+.bottom-nav-link:active {
+  transform: scale(0.98);
+}
+
+.bottom-nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--nav-color, #3b82f6), transparent);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  transition: width 0.3s ease;
+}
+
+.bottom-nav-link.active::after {
+  width: 60%;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
 }
 
 /* Responsive: optimizado para móvil */
 @media (max-width: 600px) {
   .bottom-nav {
-    height: 90px;      /* Igual que en escritorio */
-    min-height: 90px;
+    height: 105px;
+    min-height: 105px;
+    padding: 10px 12px 0;
+  }
+  .bottom-nav-inner {
+    gap: 4px;
+    padding: 0 4px;
   }
   .bottom-nav-link {
-    font-size: 0.95rem;
-    min-width: 60px;
-    max-width: 90px;
-    padding: 4px 0 0 0;
+    font-size: 0.8rem;
+    min-width: 52px;
+    max-width: 72px;
+    padding: 8px 3px 7px;
+    height: 70px;
   }
   .bottom-nav-link i {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
+    margin-bottom: 1px;
   }
   .bottom-nav-link span {
-    font-size: 0.75rem;
+    font-size: 0.68rem;
+    line-height: 1;
+    margin-top: 1px;
+  }
+}
+
+/* Espaciado adicional para evitar que el menú tape el contenido en móvil */
+@media (max-width: 600px) {
+  .bottom-spacer {
+    height: 115px; /* Ajustado para móvil */
+  }
+  
+  .container, .main-content, .page-content, .cuadre-diario-container {
+    padding-bottom: 125px !important;
+  }
+  
+  body {
+    padding-bottom: 115px;
   }
 }
 
@@ -382,9 +504,9 @@ h2, h4 {
   font-size: 18px;
 }
 
-/* Espaciador actualizado: solo el espacio seguro del dispositivo */
+/* Espaciador actualizado: debe coincidir con la altura del menú */
 .bottom-spacer {
-  height: 90px; /* igual a la altura de .bottom-nav */
+  height: 120px; /* Mayor que la altura de .bottom-nav para dar espacio extra */
 }
 
 /* Resumen de caja */
@@ -510,5 +632,277 @@ h2, h4 {
     min-width: 0;
     text-align: right;
     margin-bottom: 2px;
+  }
+}
+
+/* ========================= */
+/* ESTILOS CUADRE DIARIO    */
+/* ========================= */
+
+/* Contenedor principal del cuadre diario */
+.cuadre-diario-container {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+  padding: 20px 10px 140px 10px;
+}
+
+/* Animaciones suaves para elementos interactivos */
+.cuadre-diario-container .card {
+  transition: box-shadow 0.3s ease;
+}
+
+.cuadre-diario-container .card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Estilos para filtros */
+.cuadre-diario-container .form-select,
+.cuadre-diario-container .form-control {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cuadre-diario-container .form-select:focus,
+.cuadre-diario-container .form-control:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Badges modernos */
+.cuadre-diario-container .badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* Botones modernos */
+.cuadre-diario-container .btn {
+  transition: box-shadow 0.2s ease;
+  font-weight: 600;
+  border-radius: 12px;
+}
+
+.cuadre-diario-container .btn:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Toggle buttons modernos */
+.cuadre-diario-container .btn-outline-primary {
+  border: 2px solid #e2e8f0;
+  color: #64748b;
+}
+
+.cuadre-diario-container .btn-outline-primary:hover,
+.cuadre-diario-container .btn-outline-primary.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border-color: #6366f1;
+  color: white;
+}
+
+/* Tabla responsive mejorada */
+.cuadre-diario-container .table-responsive {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.cuadre-diario-container .table {
+  margin-bottom: 0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.cuadre-diario-container .table th {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 13px;
+  border: none;
+  padding: 12px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cuadre-diario-container .table td {
+  border: 1px solid #f1f5f9;
+  vertical-align: middle;
+  padding: 10px 8px;
+}
+
+.cuadre-diario-container .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(248, 250, 252, 0.5);
+}
+
+.cuadre-diario-container .table-hover tbody tr:hover {
+  background-color: rgba(99, 102, 241, 0.05);
+  transition: background-color 0.2s ease;
+}
+
+/* Responsive mejorado */
+@media (max-width: 768px) {
+  .cuadre-diario-container {
+    padding: 15px 5px 130px 5px;
+  }
+  
+  .cuadre-diario-container .table {
+    font-size: 12px;
+  }
+  
+  .cuadre-diario-container .table th,
+  .cuadre-diario-container .table td {
+    padding: 6px 4px;
+  }
+}
+
+/* Animación de carga */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cuadre-diario-container .card {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+/* Efectos de gradiente para fondos */
+.gradient-bg-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.gradient-bg-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.gradient-bg-info {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+}
+
+.gradient-bg-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.gradient-bg-light {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+/* =============================== */
+/* VISTA POR PROFESIONAL MEJORADA */
+/* =============================== */
+
+/* Cards de profesional mejoradas */
+.cuadre-diario-container .professional-card {
+  border: 2px solid #e2e8f0;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cuadre-diario-container .professional-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Header del profesional con efectos glassmorphism */
+.professional-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.professional-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+  opacity: 0.3;
+}
+
+/* Métricas con animación de aparición */
+.metric-card {
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Iconos con pulso sutil */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.metric-icon {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Tabla interna mejorada */
+.professional-table-container {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.professional-table-container .table {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0;
+}
+
+.professional-table-container .table th {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: none;
+  padding: 10px 8px;
+}
+
+.professional-table-container .table td {
+  border: 1px solid #f1f5f9;
+  padding: 8px;
+  font-size: 13px;
+}
+
+/* Badge de contador mejorado */
+.record-counter {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Responsive para vista profesional */
+@media (max-width: 768px) {
+  .professional-header {
+    padding: 16px !important;
+  }
+  
+  .metric-card {
+    padding: 8px !important;
+    margin-bottom: 8px;
+  }
+  
+  .professional-table-container .table {
+    font-size: 11px;
+  }
+  
+  .professional-table-container .table th,
+  .professional-table-container .table td {
+    padding: 4px 6px;
   }
 }

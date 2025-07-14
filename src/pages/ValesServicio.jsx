@@ -1,40 +1,46 @@
 import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, runTransaction, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 
 function ValesServicio() {
-  const { user, rol } = useAuth();
+  const { user, rol, nombre } = useAuth();
+  
   const [servicio, setServicio] = useState('');
   const [valor, setValor] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
   const [valesGastoUsuario, setValesGastoUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [fechaFiltro, setFechaFiltro] = useState(() => getHoyLocal());
+  const [fechaFiltro, setFechaFiltro] = useState(() => {
+    // Por defecto mostrar solo el día actual
+    const hoy = new Date();
+    return hoy.toISOString().slice(0, 10);
+  });
   const servicioRef = useRef(null);
   const valorRef = useRef(null);
 
   useEffect(() => {
-    const fetchNombre = async () => {
-      if (user?.uid) {
-        const usuarioDoc = await getDoc(doc(db, 'usuarios', user.uid));
-        setNombreActual(usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : '');
-      }
-    };
-    fetchNombre();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !rol) return;
     setLoading(true);
     const unsub = onSnapshot(collection(db, 'vales_servicio'), snap => {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
-        if (data.peluqueroUid === user.uid) {
+        
+        // Determinar si mostrar el vale según el rol
+        let mostrarVale = false;
+        
+        if (['admin', 'anfitrion'].includes(rol)) {
+          // Admin y anfitrion ven todos los vales
+          mostrarVale = true;
+        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
+          // Barberos, estilistas y estetica ven sus propios vales
+          mostrarVale = (data.peluqueroUid === user.uid);
+        }
+        
+        if (mostrarVale) {
           vales.push({
             ...data,
             id: docu.id,
@@ -47,15 +53,27 @@ function ValesServicio() {
       setLoading(false);
     });
     return () => unsub();
-  }, [user, mensaje]);
+  }, [user?.uid, rol, mensaje]);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !rol) return;
     const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
-        if (data.peluqueroUid === user.uid) { // <-- CAMBIADO AQUÍ
+        
+        // Determinar si mostrar el vale según el rol
+        let mostrarVale = false;
+        
+        if (['admin', 'anfitrion'].includes(rol)) {
+          // Admin y anfitrion ven todos los vales de gasto
+          mostrarVale = true;
+        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
+          // Barberos, estilistas y estetica ven sus propios vales de gasto
+          mostrarVale = (data.peluqueroUid === user.uid);
+        }
+        
+        if (mostrarVale) {
           vales.push({
             ...data,
             id: docu.id,
@@ -66,7 +84,7 @@ function ValesServicio() {
       setValesGastoUsuario(vales);
     });
     return () => unsub();
-  }, [user]);
+  }, [user?.uid, rol]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -87,90 +105,125 @@ function ValesServicio() {
     }
 
     try {
-      let nombre = nombreActual;
-      if (!nombre) {
-        const usuarioDoc = await getDoc(doc(db, 'usuarios', user.uid));
-        nombre = usuarioDoc.exists() && usuarioDoc.data().nombre ? usuarioDoc.data().nombre : 'Sin nombre';
+      // Verificar que tenemos el nombre del usuario
+      let nombreUsuario = nombre;
+      
+      // Si no tenemos nombre del contexto, intentar obtenerlo directamente
+      if (!nombreUsuario || nombreUsuario === 'Usuario sin nombre') {
+        try {
+          const usuarioDoc = await getDoc(doc(db, 'usuarios', user.uid));
+          if (usuarioDoc.exists()) {
+            const userData = usuarioDoc.data();
+            nombreUsuario = userData.nombre || 'Usuario sin nombre configurado';
+          } else {
+            nombreUsuario = 'Usuario sin documento en BD';
+          }
+        } catch (error) {
+          console.error('Error obteniendo nombre:', error);
+          nombreUsuario = 'Error al obtener nombre';
+        }
       }
 
-      // --- CORRELATIVO DIARIO CON TRANSACCIÓN ---
-      const hoy = getHoyLocal(); // "YYYY-MM-DD"
-      const contadorRef = doc(db, 'contadores', `vales_servicio_${hoy}`);
-      let nuevoNumero = 1;
-      await runTransaction(db, async (transaction) => {
-        const contadorDoc = await transaction.get(contadorRef);
-        if (contadorDoc.exists()) {
-          nuevoNumero = Number(contadorDoc.data().numero) + 1;
-          transaction.update(contadorRef, { numero: nuevoNumero });
-        } else {
-          transaction.set(contadorRef, { numero: 1 });
+      // --- SISTEMA DE CÓDIGOS CORRELATIVOS ---
+      // Obtener el último número de vale para generar el siguiente
+      const valesQuery = query(
+        collection(db, 'vales_servicio'),
+        where('codigo', '!=', null)
+      );
+      
+      const valesSnapshot = await getDocs(valesQuery);
+      let ultimoNumero = 0;
+      
+      // Buscar el número más alto
+      valesSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.codigo && data.codigo.startsWith('S-')) {
+          const numero = parseInt(data.codigo.replace('S-', ''));
+          if (!isNaN(numero) && numero > ultimoNumero) {
+            ultimoNumero = numero;
+          }
         }
       });
-      const codigoServicio = `S-${String(nuevoNumero).padStart(3, '0')}`;
+      
+      // Generar el siguiente número
+      const siguienteNumero = ultimoNumero + 1;
+      const codigoServicio = `S-${siguienteNumero.toString().padStart(3, '0')}`;
 
-      const valesRef = collection(db, 'vales_servicio');
-      const docRef = doc(valesRef);
-
-      await setDoc(docRef, {
+      // Crear el vale directamente
+      const valeRef = doc(collection(db, 'vales_servicio'));
+      await setDoc(valeRef, {
+        codigo: codigoServicio,
         servicio: servicio.trim(),
         valor: Number(valor),
+        peluquero: nombreUsuario,
         peluqueroUid: user.uid,
-        peluqueroEmail: user.email,
-        peluqueroNombre: nombre,
-        estado: 'pendiente',
-        aprobadoPor: '',
+        peluqueroEmail: user.email, // Agregar el email para compatibilidad con el dashboard
         fecha: Timestamp.now(),
-        codigo: codigoServicio
+        estado: 'pendiente'
       });
 
+      setMensaje(`Vale creado exitosamente con código: ${codigoServicio}`);
       setServicio('');
       setValor('');
-      if (servicioRef.current) servicioRef.current.blur();
-      if (valorRef.current) valorRef.current.blur();
-
-      setMensaje('¡Vale enviado correctamente!');
-      setTimeout(() => {
-        setMensaje('');
-        setLoading(false);
-      }, 2000);
+      servicioRef.current?.focus();
     } catch (error) {
-      console.error("Error al enviar el vale:", error);
-      setMensaje('Error al enviar el vale');
-      setTimeout(() => setMensaje(''), 2000);
+      console.error('Error:', error);
+      setMensaje(`Error: ${error.message}`);
+    } finally {
       setLoading(false);
     }
   };
 
-  const valesFiltrados = valesUsuario.filter(vale => {
-    const fechaValeLocal = new Date(vale.fecha.getTime() - vale.fecha.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-    return fechaValeLocal === fechaFiltro;
-  });
+  // Filtrar vales por fecha
+  const valesFiltrados = fechaFiltro 
+    ? valesUsuario.filter(vale => {
+        const fechaVale = vale.fecha.toISOString().slice(0, 10);
+        return fechaVale === fechaFiltro;
+      })
+    : valesUsuario; // Si no hay filtro de fecha (caso especial), mostrar todos
 
-  const gastosFiltrados = valesGastoUsuario.filter(vale => {
-    if (!vale.fecha) return false;
-    // Asegura que la fecha sea un objeto Date
-    const fechaVale = vale.fecha?.toDate ? vale.fecha.toDate() : new Date(vale.fecha);
-    const fechaValeLocal = new Date(fechaVale.getTime() - fechaVale.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-    // Acepta 'aprobado' o 'Aprobado' y si no existe el campo, igual lo suma
-    return fechaValeLocal === fechaFiltro && String(vale.estado).toLowerCase() === 'aprobado';
-  });
-  const totalGastosDia = gastosFiltrados.reduce((acc, v) => acc + (Number(v.valor) || 0), 0);
+  // Calcular métricas del día o totales
+  const totalGastosDia = fechaFiltro 
+    ? valesGastoUsuario
+        .filter(v => {
+          const fechaVale = v.fecha.toISOString().slice(0, 10);
+          return fechaVale === fechaFiltro && v.estado === 'aprobado';
+        })
+        .reduce((acc, v) => acc + (v.valor || 0), 0)
+    : valesGastoUsuario
+        .filter(v => v.estado === 'aprobado')
+        .reduce((acc, v) => acc + (v.valor || 0), 0);
 
-  const acumuladoDia = valesFiltrados
-    .filter(v => v.estado === 'aprobado')
-    .reduce((acc, v) => acc + (getGanancia(v) || 0), 0);
+  const acumuladoDia = fechaFiltro
+    ? valesFiltrados
+        .filter(v => v.estado === 'aprobado')
+        .reduce((acc, v) => acc + (getGanancia(v) || 0), 0)
+    : valesUsuario
+        .filter(v => v.estado === 'aprobado')
+        .reduce((acc, v) => acc + (getGanancia(v) || 0), 0);
 
   const acumuladoNeto = acumuladoDia - totalGastosDia;
 
   // Función para calcular la ganancia real
   function getGanancia(vale) {
     if (vale.estado === 'aprobado') {
-      // Suma la comisión extra si existe
-      const base = vale.dividirPorDos ? Number(vale.valor) / 2 : Number(vale.valor);
+      // Determinar el porcentaje que le corresponde al profesional
+      let porcentajeProfesional = 100; // Por defecto 100%
+      
+      if (vale.dividirPorDos) {
+        if (typeof vale.dividirPorDos === 'string') {
+          // Nuevo sistema con porcentajes específicos
+          porcentajeProfesional = Number(vale.dividirPorDos);
+        } else {
+          // Sistema anterior (boolean) - 50%
+          porcentajeProfesional = 50;
+        }
+      }
+      
+      // Calcular la base del servicio con el porcentaje
+      const base = (Number(vale.valor) * porcentajeProfesional) / 100;
+      
+      // Sumar la comisión extra (no se divide)
       return base + (Number(vale.comisionExtra) || 0);
     }
     return null;
@@ -179,423 +232,579 @@ function ValesServicio() {
   if (
     !['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)
   ) {
-    return <Alert variant="danger" className="mt-4 text-center">No autorizado</Alert>;
+    return <Alert variant="danger" className="mt-4 text-center">No autorizado - Rol: {rol}</Alert>;
   }
 
   return (
-    <div
-      className="container"
-      style={{
-        background: "#f8fafc",
-        minHeight: "100vh",
-        paddingTop: 32,
-        paddingBottom: 32,
-      }}
-    >
+    <div className="vales-servicio-container" style={{
+      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+      minHeight: '100vh',
+      padding: '20px 10px 140px 10px'
+    }}>
       <Row className="justify-content-center">
         <Col xs={12} md={10} lg={8} xl={7}>
-          <Card
-            className="shadow-sm border-0"
-            style={{
-              borderRadius: 22,
-              background: "#fff",
-              boxShadow: "0 2px 16px #0001",
-              borderLeft: "8px solid #2563eb",
-            }}
-          >
-            <Card.Body>
-              <Card.Title
-                className="mb-4 text-center"
-                style={{
-                  fontWeight: 800,
-                  letterSpacing: '-1px',
-                  fontSize: 28,
-                  color: "#2563eb",
-                  textShadow: "0 1px 0 #e0e7ef",
-                }}
-              >
-                <i className="bi bi-receipt me-2"></i>Vales de Servicio
-              </Card.Title>
-              {user && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    marginBottom: 18,
-                    fontWeight: 600,
-                    color: "#444",
-                  }}
-                >
-                  <span
-                    style={{
-                      background: "#e0e7ef",
-                      borderRadius: 10,
-                      padding: "6px 18px",
-                      fontSize: 17,
-                      boxShadow: "0 1px 4px #0001",
-                    }}
-                  >
-                    <i className="bi bi-person-circle me-1"></i>
-                    {nombreActual}
-                  </span>
+          <Card className="shadow-sm border-0" style={{
+            borderRadius: 24,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            overflow: 'hidden'
+          }}>
+            <Card.Body className="p-0">
+              {/* Header modernizado */}
+              <div style={{
+                background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                padding: '24px',
+                color: 'white'
+              }}>
+                <div className="d-flex align-items-center justify-content-between">
+                  <div>
+                    <h4 className="mb-1 fw-bold" style={{ fontSize: '1.4rem' }}>
+                      <i className="bi bi-scissors me-2"></i>
+                      Vales de Servicio
+                    </h4>
+                    <p className="mb-0 opacity-90" style={{ fontSize: '0.95rem' }}>
+                      {['admin', 'anfitrion'].includes(rol) 
+                        ? 'Gestiona todos los vales de servicio' 
+                        : 'Registra tus servicios realizados'
+                      }
+                    </p>
+                  </div>
+                  <div className="text-end">
+                    <div style={{ 
+                      background: 'rgba(255,255,255,0.15)', 
+                      padding: '8px 12px', 
+                      borderRadius: '8px',
+                      backdropFilter: 'blur(10px)'
+                    }}>
+                      <small className="d-block opacity-90">
+                        {fechaFiltro ? `Registros del ${fechaFiltro}` : 'Total registros'}
+                      </small>
+                      <strong style={{ fontSize: '1.2rem' }}>{valesFiltrados.length}</strong>
+                    </div>
+                  </div>
                 </div>
-              )}
-              {(['barbero', 'estilista', 'estetica', 'admin', 'anfitrion'].includes(rol)) && (
-                <Form
-                  onSubmit={handleSubmit}
-                  className="mb-4 p-3"
-                  style={{
-                    background: "#f1f5f9",
-                    borderRadius: 14,
-                    boxShadow: "0 1px 8px #0001",
-                    borderLeft: "4px solid #2563eb",
-                  }}
-                >
+              </div>
+
+              {/* Formulario modernizado */}
+              <div style={{ padding: '24px' }}>
+                <Form onSubmit={handleSubmit}>
                   <Row className="g-3">
-                    <Col xs={12} md={7}>
-                      <Form.Group controlId="servicio">
-                        <Form.Label style={{ fontWeight: 600, color: "#2563eb" }}>Servicio</Form.Label>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label style={{ 
+                          fontWeight: 600, 
+                          color: '#374151', 
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: '8px'
+                        }}>
+                          <i className="bi bi-cut me-2 text-primary"></i>
+                          Servicio Realizado
+                        </Form.Label>
                         <Form.Control
-                          type="text"
-                          placeholder="Ej: Corte de cabello"
-                          value={servicio}
-                          onChange={e => setServicio(e.target.value)}
-                          autoFocus
                           ref={servicioRef}
-                          style={{ borderRadius: 8, border: "1.5px solid #c7d2fe" }}
+                          type="text"
+                          value={servicio}
+                          onChange={(e) => setServicio(e.target.value)}
+                          placeholder="Ej: Corte, Barba, Color..."
+                          disabled={loading}
+                          style={{
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '12px',
+                            padding: '12px 16px',
+                            fontSize: '0.95rem',
+                            transition: 'all 0.2s ease',
+                            backgroundColor: '#f8fafc'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                          onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                         />
                       </Form.Group>
                     </Col>
-                    <Col xs={12} md={5}>
-                      <Form.Group controlId="valor">
-                        <Form.Label style={{ fontWeight: 600, color: "#2563eb" }}>Valor</Form.Label>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label style={{ 
+                          fontWeight: 600, 
+                          color: '#374151', 
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: '8px'
+                        }}>
+                          <i className="bi bi-currency-dollar me-2 text-success"></i>
+                          Valor del Servicio
+                        </Form.Label>
                         <Form.Control
-                          type="number"
-                          placeholder="Ej: 10000"
-                          value={valor}
-                          onChange={e => setValor(e.target.value)}
-                          min={1}
                           ref={valorRef}
-                          style={{ borderRadius: 8, border: "1.5px solid #c7d2fe" }}
+                          type="number"
+                          value={valor}
+                          onChange={(e) => setValor(e.target.value)}
+                          placeholder="0"
+                          disabled={loading}
+                          style={{
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '12px',
+                            padding: '12px 16px',
+                            fontSize: '0.95rem',
+                            transition: 'all 0.2s ease',
+                            backgroundColor: '#f8fafc'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                          onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                         />
                       </Form.Group>
                     </Col>
                   </Row>
-                  <div className="d-grid mt-3">
+                  
+                  <div className="mt-4 d-flex gap-3 align-items-center">
                     <Button
-                      variant="primary"
                       type="submit"
                       disabled={loading}
                       style={{
-                        fontWeight: 700,
-                        fontSize: 17,
-                        borderRadius: 8,
-                        boxShadow: "0 1px 6px #2563eb22",
+                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                        border: 'none',
+                        borderRadius: '12px',
+                        padding: '12px 24px',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                        transition: 'all 0.2s ease'
                       }}
+                      onMouseEnter={(e) => e.target.style.transform = 'translateY(-1px)'}
+                      onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
                     >
                       {loading ? (
-                        <Spinner size="sm" animation="border" />
+                        <>
+                          <Spinner size="sm" className="me-2" />
+                          Procesando...
+                        </>
                       ) : (
                         <>
-                          <i className="bi bi-plus-circle me-1"></i>Enviar Vale
+                          <i className="bi bi-plus-circle me-2"></i>
+                          Registrar Vale
                         </>
                       )}
                     </Button>
-                  </div>
-                  {mensaje && (
-                    <Alert
-                      className="mt-3 mb-0"
-                      variant={mensaje.startsWith('¡') ? 'success' : 'danger'}
-                      style={{
-                        borderRadius: 8,
-                        fontWeight: 600,
-                        fontSize: 16,
-                      }}
-                    >
-                      {mensaje}
-                    </Alert>
-                  )}
-                </Form>
-              )}
-              {user && (
-                <>
-                  <hr />
-                  <h5
-                    className="mb-3"
-                    style={{
-                      fontWeight: 700,
-                      color: "#2563eb",
-                      letterSpacing: "-0.5px",
-                    }}
-                  >
-                    <i className="bi bi-list-ul me-2"></i>Mis vales enviados
-                  </h5>
-                  <Form.Group className="mb-3" controlId="fechaFiltro">
-                    <Form.Label style={{ fontWeight: 600, color: "#2563eb" }}>
-                      Filtrar por fecha
-                    </Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={fechaFiltro}
-                      max={getHoyLocal()}
-                      onChange={e => setFechaFiltro(e.target.value)}
-                      style={{
-                        maxWidth: 200,
-                        borderRadius: 8,
-                        border: "1.5px solid #c7d2fe",
-                      }}
-                    />
-                  </Form.Group>
-                  {/* Acumulado del día */}
-               
-                  {/* Ganancia real, gasto y ganancia neta del día */}
-                  {(acumuladoDia > 0 || totalGastosDia > 0) && (
-                    <div style={{ marginBottom: 10, textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: 17,
-                          color: "#16a34a",
-                          background: "#f0fdf4",
-                          borderRadius: 8,
-                          padding: "6px 14px",
-                          boxShadow: "0 1px 4px #0001",
-                          marginBottom: 4
+                    
+                    {mensaje && (
+                      <Alert 
+                        variant={mensaje.includes('Error') ? 'danger' : 'success'} 
+                        className="mb-0 py-2 px-3 flex-1"
+                        style={{ 
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          border: 'none'
                         }}
                       >
-                        Ganancia neta del día: ${acumuladoDia.toLocaleString()} - ${totalGastosDia.toLocaleString()} = <b>${acumuladoNeto.toLocaleString()}</b>
-                      </div>
-                      {totalGastosDia > 0 && (
-                        <div
-                          style={{
-                            fontWeight: 600,
-                            fontSize: 15,
-                            color: "#dc3545",
-                            marginTop: 2
+                        {mensaje}
+                      </Alert>
+                    )}
+                  </div>
+                </Form>
+              </div>
+
+              {/* Filtros y resumen del día */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)', 
+                padding: '20px 24px',
+                borderTop: '1px solid #e2e8f0'
+              }}>
+                <Row className="g-3 align-items-center">
+                  <Col md={4}>
+                    <Form.Group className="mb-0">
+                      <Form.Label style={{ 
+                        fontWeight: 600, 
+                        color: '#374151', 
+                        fontSize: '0.9rem',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <i className="bi bi-calendar3 me-2 text-primary"></i>
+                        Filtrar por fecha
+                      </Form.Label>
+                      <Form.Control
+                        type="date"
+                        value={fechaFiltro}
+                        onChange={(e) => setFechaFiltro(e.target.value)}
+                        placeholder="Seleccionar fecha..."
+                        style={{
+                          border: '2px solid #cbd5e1',
+                          borderRadius: '10px',
+                          padding: '8px 12px',
+                          fontSize: '0.9rem',
+                          backgroundColor: 'white'
+                        }}
+                      />
+                      <div className="mt-2 d-flex gap-2">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => {
+                            const hoy = new Date();
+                            setFechaFiltro(hoy.toISOString().slice(0, 10));
                           }}
+                          style={{ fontSize: '0.8rem' }}
                         >
-                          Gasto del día: -${totalGastosDia.toLocaleString()}
+                          <i className="bi bi-calendar-day me-1"></i>
+                          Hoy
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={() => setFechaFiltro('')}
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          <i className="bi bi-calendar3 me-1"></i>
+                          Todos
+                        </Button>
+                      </div>
+                    </Form.Group>
+                  </Col>
+                  <Col md={8}>
+                    <Row className="g-2">
+                      <Col xs={6} md={3}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #93c5fd'
+                        }}>
+                          <div style={{ color: '#1e40af', fontSize: '0.8rem', fontWeight: 500 }}>
+                            Registros
+                          </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1e3a8a' }}>
+                            {valesFiltrados.length}
+                          </div>
                         </div>
-                      )}
+                      </Col>
+                      <Col xs={6} md={3}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #86efac'
+                        }}>
+                        <div style={{ color: '#166534', fontSize: '0.8rem', fontWeight: 500 }}>
+                          {fechaFiltro 
+                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) ? 'Ingresos de hoy' : 'Ingresos del día')
+                            : 'Total ingresos'
+                          }
+                        </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#14532d' }}>
+                            ${acumuladoDia.toLocaleString()}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col xs={6} md={3}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: '1px solid #fcd34d'
+                        }}>
+                        <div style={{ color: '#92400e', fontSize: '0.8rem', fontWeight: 500 }}>
+                          {fechaFiltro 
+                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) ? 'Gastos de hoy' : 'Gastos del día')
+                            : 'Total gastos'
+                          }
+                        </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#78350f' }}>
+                            ${totalGastosDia.toLocaleString()}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col xs={6} md={3}>
+                        <div style={{
+                          background: `linear-gradient(135deg, ${acumuladoNeto >= 0 ? '#dcfce7' : '#fee2e2'} 0%, ${acumuladoNeto >= 0 ? '#bbf7d0' : '#fecaca'} 100%)`,
+                          padding: '12px',
+                          borderRadius: '12px',
+                          textAlign: 'center',
+                          border: `1px solid ${acumuladoNeto >= 0 ? '#86efac' : '#fca5a5'}`
+                        }}>
+                          <div style={{ color: acumuladoNeto >= 0 ? '#166534' : '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
+                            Neto
+                          </div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 700, color: acumuladoNeto >= 0 ? '#14532d' : '#7f1d1d' }}>
+                            ${acumuladoNeto.toLocaleString()}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Lista de vales modernizada */}
+              {loading ? (
+                <div className="text-center py-5">
+                  <Spinner animation="border" style={{ color: '#2563eb' }} />
+                  <p className="mt-3 text-muted">Cargando vales...</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                    padding: '16px 24px',
+                    borderTop: '1px solid #e2e8f0'
+                  }}>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h6 className="mb-0" style={{ 
+                        fontWeight: 600, 
+                        color: '#374151',
+                        fontSize: '1rem'
+                      }}>
+                        <i className="bi bi-list-ul me-2 text-primary"></i>
+                        {['admin', 'anfitrion'].includes(rol) 
+                          ? (fechaFiltro 
+                              ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                  ? 'Todos los vales de hoy' 
+                                  : `Todos los vales del ${fechaFiltro}`)
+                              : 'Todos los vales'
+                            )
+                          : (fechaFiltro 
+                              ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                  ? 'Tus vales de hoy' 
+                                  : `Tus vales del ${fechaFiltro}`)
+                              : 'Todos tus vales'
+                            )
+                        }
+                      </h6>
+                      <span style={{ 
+                        background: '#2563eb', 
+                        color: 'white', 
+                        padding: '4px 12px', 
+                        borderRadius: '12px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600
+                      }}>
+                        {valesFiltrados.length} registros
+                      </span>
                     </div>
-                  )}
-                  {/* Tabla para pantallas medianas y grandes */}
-                  <div className="d-none d-md-block" style={{ overflowX: 'auto', width: '100%', background: "#fff", padding: 0 }}>
-                    <Table
-                      striped
-                      bordered
-                      hover
-                      size="sm"
-                      className="mb-0"
-                      style={{
-                        fontSize: 14,
-                        minWidth: 900,
-                        background: "#fff"
-                      }}
-                    >
-                      <thead>
-                        <tr>
-                          <th style={{padding: '4px 6px'}}>Código</th>
-                          <th style={{padding: '4px 6px'}}>Fecha</th>
-                          <th style={{padding: '4px 6px'}}>Hora</th>
-                          <th style={{padding: '4px 6px'}}>Servicio</th>
-                          <th style={{padding: '4px 6px'}}>Valor</th>
-                          <th style={{padding: '4px 6px'}}>Comisión</th>
-                          <th style={{padding: '4px 6px'}}>Ganancia</th>
-                          <th style={{padding: '4px 6px'}}>Estado</th>
-                          <th style={{padding: '4px 6px'}}>Aprobado por</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {valesFiltrados.length === 0 ? (
+                  </div>
+                  
+                  <div style={{ padding: '0 12px 24px 12px' }}>
+                    {/* Tabla compacta para todas las pantallas */}
+                    <div style={{ 
+                      overflowX: 'auto', 
+                      borderRadius: '12px', 
+                      border: '1px solid #e2e8f0',
+                      background: '#fff'
+                    }}>
+                      <Table className="mb-0" style={{ 
+                        fontSize: '0.8rem',
+                        background: '#fff',
+                        minWidth: '100%'
+                      }}>
+                        <thead style={{ backgroundColor: '#f8fafc' }}>
                           <tr>
-                            <td colSpan={9} className="text-center text-muted">
-                              No tienes vales enviados para esta fecha.
-                            </td>
+                            {/* Columnas adaptativas según el tamaño de pantalla */}
+                            <th className="d-none d-md-table-cell" style={{padding: '8px 12px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Código</th>
+                            {['admin', 'anfitrion'].includes(rol) && (
+                              <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Profesional</th>
+                            )}
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Servicio</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Valor</th>
+                            <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>%</th>
+                            <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Comisión</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Total</th>
+                            <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Fecha</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Hora</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Estado</th>
+                            <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Aprobado</th>
                           </tr>
-                        ) : (
-                          valesFiltrados.map(vale => (
-                            <tr
-                              key={vale.id}
-                              style={{
-                                borderLeft: `6px solid ${
-                                  vale.estado === 'aprobado'
-                                    ? '#22c55e'
-                                    : vale.estado === 'rechazado'
-                                    ? '#dc3545'
-                                    : '#f59e42'
-                                }`,
-                                background: vale.estado === 'rechazado'
-                                  ? '#fef2f2'
-                                  : vale.estado === 'aprobado'
-                                  ? '#f0fdf4'
-                                  : '#fffbeb',
-                                fontWeight: 500,
-                                fontSize: 15,
-                              }}
-                            >
-                              <td style={{padding: '4px 6px', fontWeight: 700, color: '#2563eb'}}>{vale.codigo || 'S-000'}</td>
-                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
-                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio}</td>
-                              <td style={{padding: '4px 6px', fontWeight: 700, color: '#2563eb'}}>
-                                ${Number(vale.valor).toLocaleString()}
-                              </td>
-                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
-                              </td>
-                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                                {vale.estado === 'aprobado'
-                                  ? `$${getGanancia(vale).toLocaleString()}`
-                                  : vale.estado === 'rechazado'
-                                    ? 'Rechazado'
-                                    : 'Pendiente'}
-                              </td>
-                              <td style={{padding: '4px 6px'}}>
-                                <span className={`badge ${
-                                  vale.estado === 'aprobado'
-                                    ? 'bg-success'
-                                    : vale.estado === 'rechazado'
-                                    ? 'bg-danger'
-                                    : 'bg-warning text-dark'
-                                }`}>
-                                  {vale.estado === 'aprobado'
-                                    ? 'Aprobado'
-                                    : vale.estado === 'rechazado'
-                                    ? 'Rechazado'
-                                    : 'Pendiente'}
-                                </span>
-                              </td>
-                              <td style={{padding: '4px 6px'}}>
-                                {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#22c55e', fontWeight: 700 }}>
-                                    <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                    {vale.aprobadoPor}
-                                  </span>
-                                ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                  <span style={{ color: '#dc3545', fontWeight: 700 }}>
-                                    <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                    {vale.aprobadoPor}
-                                  </span>
-                                ) : (
-                                  <span className="text-secondary">-</span>
-                                )}
+                        </thead>
+                        <tbody>
+                          {valesFiltrados.length === 0 ? (
+                            <tr>
+                              <td colSpan={['admin', 'anfitrion'].includes(rol) ? 11 : 10} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
+                                <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
+                                {fechaFiltro 
+                                  ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                      ? 'No hay vales registrados hoy.'
+                                      : `No hay vales para la fecha ${fechaFiltro}.`)
+                                  : 'No hay vales registrados.'
+                                }
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </Table>
-                  </div>
-                  {/* Tabla para pantallas pequeñas */}
-                  <div className="d-md-none">
-                    {valesFiltrados.length === 0 ? (
-                      <div className="text-center text-muted py-4">
-                        <i className="bi bi-info-circle" style={{ fontSize: '2rem' }}></i>
-                        <p className="mb-0" style={{ fontSize: '1.1rem' }}>
-                          No tienes vales enviados para esta fecha.
-                        </p>
-                      </div>
-                    ) : (
-                      valesFiltrados.map(vale => (
-                        <div
-                          key={vale.id}
-                          className="mb-3"
-                          style={{
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            boxShadow: "0 1px 8px #0001",
-                            background: vale.estado === 'rechazado'
-                              ? '#fef2f2'
-                              : vale.estado === 'aprobado'
-                                ? '#f0fdf4'
-                                : '#fffbeb',
-                            borderLeft: `6px solid ${
-                              vale.estado === 'aprobado'
-                                ? '#22c55e'
-                                : vale.estado === 'rechazado'
-                                ? '#dc3545'
-                                : '#f59e42'
-                            }`
-                          }}
-                        >
-                          <div className="d-flex justify-content-between align-items-center" style={{ padding: '12px 16px', background: '#f3f4f6' }}>
-                            <div>
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Código:</span>
-                              <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '1.1rem', marginLeft: 6 }}>
-                                {vale.codigo || 'S-000'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className={`badge ${
-                                vale.estado === 'aprobado'
-                                  ? 'bg-success'
-                                  : vale.estado === 'rechazado'
-                                  ? 'bg-danger'
-                                  : 'bg-warning text-dark'
-                              }`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                                {vale.estado === 'aprobado'
-                                  ? 'Aprobado'
-                                  : vale.estado === 'rechazado'
-                                  ? 'Rechazado'
-                                  : 'Pendiente'}
-                              </span>
-                            </div>
-                          </div>
-                          <div style={{ padding: '16px', borderTop: '1px solid #e0e7ef' }}>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Fecha:</span>
-                              <span style={{ fontWeight: 600, color: '#374151', fontSize: '1rem', marginLeft: 6 }}>
-                                {vale.fecha.toLocaleDateString()} {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Servicio:</span>
-                              <span style={{ fontWeight: 600, color: '#2563eb', fontSize: '1rem', marginLeft: 6 }}>
-                                {vale.servicio}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Valor:</span>
-                              <span style={{ fontWeight: 700, color: '#2563eb', fontSize: '1.1rem', marginLeft: 6 }}>
-                                ${Number(vale.valor).toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Comisión:</span>
-                              <span style={{ fontWeight: 700, color: '#6366f1', fontSize: '1.1rem', marginLeft: 6 }}>
-                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
-                              </span>
-                            </div>
-                            <div className="mb-2">
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Ganancia:</span>
-                              <span style={{ fontWeight: 700, color: '#6366f1', fontSize: '1.1rem', marginLeft: 6 }}>
-                                {vale.estado === 'aprobado'
-                                  ? `$${getGanancia(vale).toLocaleString()}`
-                                  : vale.estado === 'rechazado'
-                                    ? 'Rechazado'
-                                    : 'Pendiente'}
-                              </span>
-                            </div>
-                            <div>
-                              <span style={{ fontSize: '0.9rem', color: '#374151' }}>Aprobado por:</span>
-                              {vale.estado === 'aprobado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#22c55e', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
-                                  <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
-                                <span style={{ color: '#dc3545', fontWeight: 700, fontSize: '1rem', marginLeft: 6 }}>
-                                  <i className="bi bi-x-circle" style={{marginRight: 4}}></i>
-                                  {vale.aprobadoPor}
-                                </span>
-                              ) : (
-                                <span className="text-secondary" style={{ marginLeft: 6 }}>-</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                          ) : (
+                            valesFiltrados.map(vale => (
+                              <tr key={vale.id} style={{ 
+                                borderBottom: '1px solid #f1f5f9',
+                                borderLeft: `3px solid ${
+                                  vale.estado === 'aprobado' ? '#22c55e' 
+                                  : vale.estado === 'rechazado' ? '#dc3545' 
+                                  : '#f59e42'
+                                }`
+                              }}>
+                                {/* Código - Solo en pantallas md+ */}
+                                <td className="d-none d-md-table-cell" style={{padding: '8px 12px'}}>
+                                  <strong style={{ color: '#2563eb', fontSize: '0.8rem' }}>
+                                    {vale.codigo || 'S-000'}
+                                  </strong>
+                                </td>
+                                
+                                {/* Profesional - Solo para admin/anfitrion en pantallas lg+ */}
+                                {['admin', 'anfitrion'].includes(rol) && (
+                                  <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
+                                    <span style={{ 
+                                      color: '#059669', 
+                                      fontWeight: 600, 
+                                      fontSize: '0.75rem' 
+                                    }}>
+                                      {vale.peluquero || 'Sin nombre'}
+                                    </span>
+                                  </td>
+                                )}
+                                
+                                {/* Servicio - Siempre visible pero más compacto en móvil */}
+                                <td style={{padding: '8px 6px', color: '#374151', maxWidth: '120px'}}>
+                                  <div style={{ 
+                                    whiteSpace: 'nowrap', 
+                                    overflow: 'hidden', 
+                                    textOverflow: 'ellipsis',
+                                    fontWeight: 500,
+                                    fontSize: '0.8rem'
+                                  }}>
+                                    {vale.servicio}
+                                  </div>
+                                  {/* En móvil, mostrar código debajo del servicio */}
+                                  <div className="d-md-none" style={{ 
+                                    fontSize: '0.7rem', 
+                                    color: '#2563eb', 
+                                    fontWeight: 600 
+                                  }}>
+                                    {vale.codigo || 'S-000'}
+                                  </div>
+                                </td>
+                                
+                                {/* Valor - Siempre visible */}
+                                <td style={{padding: '8px 6px', fontWeight: 600, color: '#1f2937', fontSize: '0.8rem'}}>
+                                  ${vale.valor?.toLocaleString()}
+                                </td>
+                                
+                                {/* Porcentaje - Solo en pantallas sm+ */}
+                                <td className="d-none d-sm-table-cell" style={{padding: '8px 6px'}}>
+                                  <span style={{ 
+                                    color: '#4338ca',
+                                    fontWeight: 600,
+                                    fontSize: '0.75rem'
+                                  }}>
+                                    {vale.dividirPorDos ? (
+                                      typeof vale.dividirPorDos === 'string' 
+                                        ? `${vale.dividirPorDos}%`
+                                        : '50%'
+                                    ) : '100%'}
+                                  </span>
+                                </td>
+                                
+                                {/* Comisión - Solo en pantallas lg+ */}
+                                <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
+                                  {vale.comisionExtra > 0 ? (
+                                    <span style={{ color: '#059669', fontWeight: 600, fontSize: '0.75rem' }}>
+                                      ${vale.comisionExtra?.toLocaleString()}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted" style={{ fontSize: '0.75rem' }}>-</span>
+                                  )}
+                                </td>
+                                
+                                {/* Total - Siempre visible */}
+                                <td style={{padding: '8px 6px'}}>
+                                  <strong style={{ 
+                                    color: vale.estado === 'aprobado' ? '#22c55e' : '#64748b',
+                                    fontSize: '0.8rem'
+                                  }}>
+                                    ${getGanancia(vale)?.toLocaleString() || '0'}
+                                  </strong>
+                                  {/* En móvil, mostrar % y comisión como texto pequeño */}
+                                  <div className="d-sm-none" style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>
+                                    {vale.dividirPorDos ? (
+                                      typeof vale.dividirPorDos === 'string' 
+                                        ? `${vale.dividirPorDos}%`
+                                        : '50%'
+                                    ) : '100%'}
+                                    {vale.comisionExtra > 0 && ` +$${vale.comisionExtra?.toLocaleString()}`}
+                                  </div>
+                                </td>
+                                
+                                {/* Fecha - Solo en pantallas sm+ */}
+                                <td className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontSize: '0.75rem', color: '#64748b'}}>
+                                  {vale.fecha.toLocaleDateString('es-ES', { 
+                                    day: '2-digit', 
+                                    month: '2-digit' 
+                                  })}
+                                </td>
+                                
+                                {/* Hora - Siempre visible */}
+                                <td style={{padding: '8px 6px', fontSize: '0.75rem', color: '#64748b'}}>
+                                  <strong style={{ color: '#2563eb', fontSize: '0.75rem' }}>
+                                    {vale.fecha.toLocaleTimeString('es-ES', { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit',
+                                      hour12: true
+                                    })}
+                                  </strong>
+                                  {/* En móvil, mostrar fecha debajo de la hora */}
+                                  <div className="d-sm-none" style={{ 
+                                    fontSize: '0.65rem', 
+                                    color: '#64748b', 
+                                    marginTop: '2px' 
+                                  }}>
+                                    {vale.fecha.toLocaleDateString('es-ES', { 
+                                      day: '2-digit', 
+                                      month: '2-digit' 
+                                    })}
+                                  </div>
+                                </td>
+                                
+                                {/* Estado - Siempre visible */}
+                                <td style={{padding: '8px 6px'}}>
+                                  <span className={`badge ${
+                                    vale.estado === 'aprobado'
+                                      ? 'bg-success'
+                                      : vale.estado === 'rechazado'
+                                      ? 'bg-danger'
+                                      : 'bg-warning text-dark'
+                                  }`} style={{ 
+                                    fontSize: '0.65rem', 
+                                    fontWeight: 600, 
+                                    padding: '3px 6px',
+                                    borderRadius: '4px'
+                                  }}>
+                                    {vale.estado === 'aprobado' ? 'OK' 
+                                     : vale.estado === 'rechazado' ? 'X' 
+                                     : 'P'}
+                                  </span>
+                                  {/* En móvil, quitar la fecha de aquí ya que está en la columna Hora */}
+                                </td>
+                                
+                                {/* Aprobado por - Solo en pantallas lg+ */}
+                                <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
+                                  {vale.estado === 'aprobado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.75rem' }}>
+                                      <i className="bi bi-check-circle" style={{marginRight: 2}}></i>
+                                      {vale.aprobadoPor.substring(0, 8)}...
+                                    </span>
+                                  ) : vale.estado === 'rechazado' && vale.aprobadoPor ? (
+                                    <span style={{ color: '#dc3545', fontWeight: 600, fontSize: '0.75rem' }}>
+                                      <i className="bi bi-x-circle" style={{marginRight: 2}}></i>
+                                      {vale.aprobadoPor.substring(0, 8)}...
+                                    </span>
+                                  ) : (
+                                    <span className="text-secondary" style={{ fontSize: '0.75rem' }}>-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </Table>
+                    </div>
                   </div>
                 </>
               )}
@@ -608,9 +817,13 @@ function ValesServicio() {
 }
 
 function getHoyLocal() {
+  // Usar UTC para evitar problemas de zona horaria
   const hoy = new Date();
-  hoy.setHours(hoy.getHours() - hoy.getTimezoneOffset() / 60);
-  return hoy.toISOString().slice(0, 10);
+  const utc = new Date(hoy.getTime() + hoy.getTimezoneOffset() * 60000);
+  const offset = -5; // GMT-5 para Colombia
+  const colombiaTime = new Date(utc.getTime() + (offset * 3600000));
+  const fechaLocal = colombiaTime.toISOString().slice(0, 10);
+  return fechaLocal;
 }
 
 export default ValesServicio;
