@@ -40,22 +40,25 @@ function ValesGasto() {
         const data = docu.data();
         console.log('📊 ValesGasto - Procesando vale:', docu.id, data);
         
-        // Determinar si mostrar el vale según el rol
+        // SEGURIDAD: Filtrado estricto - TODOS los usuarios solo ven SUS PROPIOS vales
+        // La gestión completa de todos los vales se realiza en la sección de aprobación
         let mostrarVale = false;
         
-        if (['admin', 'anfitrion'].includes(rol)) {
-          // Admin y anfitrion ven todos los vales de gasto
-          mostrarVale = true;
-          console.log('📊 ValesGasto - Usuario admin/anfitrion, mostrando vale:', docu.id);
-        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
-          // Barberos, estilistas y estetica ven sus propios vales de gasto
+        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
+          // SEGURIDAD: TODOS los roles autorizados SOLO ven SUS PROPIOS vales
+          // Comparación estricta de UID para garantizar privacidad total
           mostrarVale = (data.peluqueroUid === user.uid);
-          console.log('📊 ValesGasto - Comparando UIDs:', {
+          console.log('📊 ValesGasto - Verificación de privacidad para rol', rol, ':', {
             dataUID: data.peluqueroUid,
             userUID: user.uid,
-            coincide: mostrarVale,
-            valeId: docu.id
+            esDelUsuario: mostrarVale,
+            valeId: docu.id,
+            mensaje: mostrarVale ? 'ACCESO PERMITIDO - Es su vale personal' : 'ACCESO DENEGADO - No es su vale personal'
           });
+        } else {
+          // SEGURIDAD: Cualquier otro rol no puede ver vales
+          console.log('📊 ValesGasto - Rol no autorizado:', rol);
+          mostrarVale = false;
         }
         
         if (mostrarVale) {
@@ -198,10 +201,7 @@ function ValesGasto() {
                       Vales de Gasto
                     </h4>
                     <p className="mb-0 opacity-90" style={{ fontSize: '0.95rem' }}>
-                      {['admin', 'anfitrion'].includes(rol) 
-                        ? 'Gestiona todos los vales de gasto' 
-                        : 'Registra tus gastos operativos'
-                      }
+                      Registra y gestiona tus gastos operativos
                     </p>
                   </div>
                   <div className="text-end">
@@ -416,7 +416,7 @@ function ValesGasto() {
                           border: '1px solid #f87171'
                         }}>
                           <div style={{ color: '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
-                            {fechaFiltro ? 'Gastos del día' : 'Total gastos'}
+                            {fechaFiltro ? 'Tus gastos del día' : 'Tus gastos totales'}
                           </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#7f1d1d' }}>
                             ${acumuladoDia.toLocaleString()}
@@ -432,7 +432,7 @@ function ValesGasto() {
                           border: '1px solid #d1d5db'
                         }}>
                           <div style={{ color: '#374151', fontSize: '0.8rem', fontWeight: 500 }}>
-                            Pendientes
+                            Tus pendientes
                           </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#111827' }}>
                             {valesFiltrados.filter(v => v.estado === 'pendiente').length}
@@ -463,10 +463,7 @@ function ValesGasto() {
                         fontSize: '1rem'
                       }}>
                         <i className="bi bi-list-ul me-2 text-danger"></i>
-                        {['admin', 'anfitrion'].includes(rol) 
-                          ? (fechaFiltro ? `Todos los vales del ${fechaFiltro}` : 'Todos los vales')
-                          : (fechaFiltro ? `Tus vales del ${fechaFiltro}` : 'Todos tus vales')
-                        }
+                        {fechaFiltro ? `Tus vales del ${fechaFiltro}` : 'Todos tus vales'}
                       </h6>
                       <span style={{ 
                         background: '#ef4444', 
@@ -498,9 +495,6 @@ function ValesGasto() {
                           <tr>
                             {/* Columnas adaptativas según el tamaño de pantalla */}
                             <th className="d-none d-md-table-cell" style={{padding: '8px 12px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Código</th>
-                            {['admin', 'anfitrion'].includes(rol) && (
-                              <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Usuario</th>
-                            )}
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Concepto</th>
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Valor</th>
                             <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Fecha</th>
@@ -512,11 +506,11 @@ function ValesGasto() {
                         <tbody>
                           {valesFiltrados.length === 0 ? (
                             <tr>
-                              <td colSpan={['admin', 'anfitrion'].includes(rol) ? 8 : 7} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
+                              <td colSpan={7} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
                                 <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
                                 {fechaFiltro 
-                                  ? `No hay vales para la fecha ${fechaFiltro}.`
-                                  : 'No hay vales registrados.'
+                                  ? `No tienes vales para la fecha ${fechaFiltro}.`
+                                  : 'No tienes vales registrados.'
                                 }
                               </td>
                             </tr>
@@ -536,19 +530,6 @@ function ValesGasto() {
                                     {vale.codigo || 'G-000'}
                                   </strong>
                                 </td>
-                                
-                                {/* Usuario - Solo para admin/anfitrion en pantallas lg+ */}
-                                {['admin', 'anfitrion'].includes(rol) && (
-                                  <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
-                                    <span style={{ 
-                                      color: '#059669', 
-                                      fontWeight: 600, 
-                                      fontSize: '0.75rem' 
-                                    }}>
-                                      {vale.peluqueroNombre || 'Sin nombre'}
-                                    </span>
-                                  </td>
-                                )}
                                 
                                 {/* Concepto - Siempre visible pero más compacto en móvil */}
                                 <td style={{padding: '8px 6px', color: '#374151', maxWidth: '120px'}}>
