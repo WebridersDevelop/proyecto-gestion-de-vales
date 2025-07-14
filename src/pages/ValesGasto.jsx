@@ -30,15 +30,11 @@ function ValesGasto() {
     if (!user?.uid || !rol) return;
     setLoading(true);
     
-    console.log('📊 ValesGasto - Consultando vales para usuario:', user.uid, 'rol:', rol);
-    
     const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
       const vales = [];
-      console.log('📊 ValesGasto - Total documentos en colección:', snap.size);
       
       snap.forEach(docu => {
         const data = docu.data();
-        console.log('📊 ValesGasto - Procesando vale:', docu.id, data);
         
         // SEGURIDAD: Filtrado estricto - TODOS los usuarios solo ven SUS PROPIOS vales
         // La gestión completa de todos los vales se realiza en la sección de aprobación
@@ -48,16 +44,8 @@ function ValesGasto() {
           // SEGURIDAD: TODOS los roles autorizados SOLO ven SUS PROPIOS vales
           // Comparación estricta de UID para garantizar privacidad total
           mostrarVale = (data.peluqueroUid === user.uid);
-          console.log('📊 ValesGasto - Verificación de privacidad para rol', rol, ':', {
-            dataUID: data.peluqueroUid,
-            userUID: user.uid,
-            esDelUsuario: mostrarVale,
-            valeId: docu.id,
-            mensaje: mostrarVale ? 'ACCESO PERMITIDO - Es su vale personal' : 'ACCESO DENEGADO - No es su vale personal'
-          });
         } else {
           // SEGURIDAD: Cualquier otro rol no puede ver vales
-          console.log('📊 ValesGasto - Rol no autorizado:', rol);
           mostrarVale = false;
         }
         
@@ -70,7 +58,6 @@ function ValesGasto() {
         }
       });
       
-      console.log('📊 ValesGasto - Vales filtrados encontrados:', vales.length);
       vales.sort((a, b) => b.fecha - a.fecha);
       setValesUsuario(vales);
       setLoading(false);

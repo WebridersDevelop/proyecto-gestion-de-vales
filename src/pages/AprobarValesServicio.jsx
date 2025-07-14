@@ -27,9 +27,24 @@ function AprobarValesServicio() {
   const [busqueda, setBusqueda] = useState('');
   const [valesSeleccionados, setValesSeleccionados] = useState([]);
   const [showMasivo, setShowMasivo] = useState(false);
-  const [comisionExtra, setComisionExtra] = useState('');
+  
+  // Estados para vista de tarjetas individuales
+  const [indiceActual, setIndiceActual] = useState(0);
+  const [modoTarjeta, setModoTarjeta] = useState(false); // Empezar en modo tabla por defecto
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
+
+  // useEffect adicional para manejar la carga inicial
+  useEffect(() => {
+    // Simular un pequeño delay para asegurar que los datos se carguen
+    const timer = setTimeout(() => {
+      if (valesServicio.length === 0 && valesGasto.length === 0) {
+        setLoading(false); // Si no hay datos después de un tiempo, quitar loading
+      }
+    }, 3000); // 3 segundos de timeout
+
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'vales_servicio'), snap => {
@@ -98,11 +113,14 @@ function AprobarValesServicio() {
       const termino = busqueda.toLowerCase();
       valesFiltrados = valesFiltrados.filter(vale =>
         (vale.servicio || vale.concepto || '').toLowerCase().includes(termino) ||
-        (vale.peluqueroNombre || vale.peluqueroEmail || '').toLowerCase().includes(termino)
+        (vale.peluqueroNombre || vale.peluquero || vale.peluqueroEmail || '').toLowerCase().includes(termino)
       );
     }
 
-    setValesPendientes(valesFiltrados.sort((a, b) => b.fecha - a.fecha));
+    const valesOrdenados = valesFiltrados.sort((a, b) => b.fecha - a.fecha);
+    setValesPendientes(valesOrdenados);
+    
+    // Mejorar la lógica de loading
     setLoading(false);
   }, [valesServicio, valesGasto, filtroTipo, filtroValor, busqueda]);
 
@@ -113,7 +131,6 @@ function AprobarValesServicio() {
     setFormaPago('');
     setLocal('');
     setDividirPorDos('100'); // reset selector
-    setComisionExtra(vale.comisionExtra ? String(vale.comisionExtra) : ''); // inicializar comisión como string
     setShowModal(true);
   };
 
@@ -137,7 +154,7 @@ function AprobarValesServicio() {
           formaPago,
           ...(valeActual.tipo === 'servicio' ? {
             dividirPorDos, // Guarda el porcentaje seleccionado
-            comisionExtra: Number(comisionExtra) || 0
+            comisionExtra: Number(valeActual.comisionExtra) || 0
           } : {})
         } : {})
       });
@@ -204,6 +221,32 @@ function AprobarValesServicio() {
       setTimeout(() => setMensaje(''), 2000);
     }
   };
+
+  // Funciones para navegación de tarjetas
+  const siguienteVale = () => {
+    if (indiceActual < valesPendientes.length - 1) {
+      setIndiceActual(prev => prev + 1);
+    }
+  };
+
+  const anteriorVale = () => {
+    if (indiceActual > 0) {
+      setIndiceActual(prev => prev - 1);
+    }
+  };
+
+  const irAVale = (indice) => {
+    setIndiceActual(indice);
+  };
+
+  // Auto-ajustar índice si se filtra y no hay suficientes vales
+  useEffect(() => {
+    if (valesPendientes.length > 0 && indiceActual >= valesPendientes.length) {
+      setIndiceActual(valesPendientes.length - 1);
+    } else if (valesPendientes.length === 0) {
+      setIndiceActual(0);
+    }
+  }, [valesPendientes.length, indiceActual]);
 
   // Calcular estadísticas
   const estadisticas = {
@@ -366,20 +409,41 @@ function AprobarValesServicio() {
               />
             </Col>
             <Col md={2} className="mb-3">
-              {valesSeleccionados.length > 0 && (
-                <Button
-                  variant="success"
-                  onClick={() => setShowMasivo(true)}
-                  style={{
-                    borderRadius: 12,
-                    fontWeight: 600,
-                    width: '100%'
-                  }}
-                >
-                  <i className="bi bi-check-all me-2"></i>
-                  Masivo ({valesSeleccionados.length})
-                </Button>
-              )}
+              <div className="d-flex gap-2">
+                {valesSeleccionados.length > 0 && (
+                  <Button
+                    variant="success"
+                    onClick={() => setShowMasivo(true)}
+                    style={{
+                      borderRadius: 12,
+                      fontWeight: 600,
+                      width: '100%'
+                    }}
+                  >
+                    <i className="bi bi-check-all me-2"></i>
+                    Masivo ({valesSeleccionados.length})
+                  </Button>
+                )}
+                {valesPendientes.length > 0 && (
+                  <Button
+                    className="d-md-none" // Solo mostrar en móvil
+                    variant={modoTarjeta ? 'primary' : 'outline-primary'}
+                    onClick={() => {
+                      setModoTarjeta(!modoTarjeta);
+                    }}
+                    style={{
+                      borderRadius: 12,
+                      fontWeight: 600,
+                      padding: '8px 16px',
+                      minWidth: '120px'
+                    }}
+                    title={modoTarjeta ? 'Cambiar a vista tabla' : 'Cambiar a vista tarjetas'}
+                  >
+                    <i className={`bi ${modoTarjeta ? 'bi-table' : 'bi-credit-card-2-front'} me-2`}></i>
+                    {modoTarjeta ? 'Tabla' : 'Tarjetas'}
+                  </Button>
+                )}
+              </div>
             </Col>
           </Row>
         </Card.Body>
@@ -440,127 +504,467 @@ function AprobarValesServicio() {
               <p>No hay vales pendientes por aprobar</p>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <Table hover className="mb-0">
-                <thead style={{
-                  background: '#f8fafc',
-                  borderTop: '1px solid #e2e8f0'
-                }}>
-                  <tr>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600 }}>
-                      <Form.Check 
-                        type="checkbox"
-                        style={{ margin: 0 }}
-                      />
-                    </th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Fecha</th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Tipo</th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Concepto</th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Valor</th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Profesional</th>
-                    <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {valesPendientes.map((vale, index) => (
-                    <tr key={vale.id} style={{
-                      borderBottom: index === valesPendientes.length - 1 ? 'none' : '1px solid #f1f5f9',
-                      transition: 'all 0.2s',
-                    }}>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <Form.Check
+            <>
+              {/* Vista de tabla tradicional - Siempre visible en desktop */}
+              <div className="d-none d-md-block" style={{ overflowX: 'auto' }}>
+                <Table hover className="mb-0">
+                  <thead style={{
+                    background: '#f8fafc',
+                    borderTop: '1px solid #e2e8f0'
+                  }}>
+                    <tr>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600 }}>
+                        <Form.Check 
                           type="checkbox"
-                          checked={valesSeleccionados.includes(vale.id)}
-                          onChange={() => toggleSeleccionVale(vale.id)}
+                          style={{ margin: 0 }}
                         />
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#1e293b' }}>
-                            {vale.fecha.toLocaleDateString()}
-                          </div>
-                          <small style={{ color: '#64748b' }}>
-                            {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </small>
-                        </div>
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <Badge 
-                          bg={vale.tipo === 'servicio' ? 'primary' : 'danger'}
-                          style={{
-                            borderRadius: 12,
-                            padding: '8px 12px',
-                            fontWeight: 600
-                          }}
-                        >
-                          <i className={`bi ${vale.tipo === 'servicio' ? 'bi-scissors' : 'bi-cash-coin'} me-1`}></i>
-                          {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
-                        </Badge>
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>
-                          {vale.servicio || vale.concepto || '-'}
-                        </div>
-                        {vale.descripcion && (
-                          <small style={{ color: '#64748b' }}>{vale.descripcion}</small>
-                        )}
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <div style={{
-                          fontWeight: 700,
-                          fontSize: '1.1rem',
-                          color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'
-                        }}>
-                          ${Number(vale.valor).toLocaleString()}
-                        </div>
-                        {vale.comisionExtra && Number(vale.comisionExtra) > 0 && (
-                          <small style={{ color: '#059669' }}>
-                            +${Number(vale.comisionExtra).toLocaleString()} extra
-                          </small>
-                        )}
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>
-                          {vale.peluqueroNombre || vale.peluqueroEmail || '-'}
-                        </div>
-                        {vale.cliente && (
-                          <small style={{ color: '#64748b' }}>Cliente: {vale.cliente}</small>
-                        )}
-                      </td>
-                      <td style={{ border: 'none', padding: '16px' }}>
-                        <ButtonGroup size="sm">
-                          <Button
-                            variant="outline-success"
-                            onClick={() => handleAccionVale(vale, 'aprobar')}
-                            style={{
-                              borderRadius: '8px 0 0 8px',
-                              fontWeight: 600,
-                              border: '2px solid #16a34a',
-                              color: '#16a34a'
-                            }}
-                          >
-                            <i className="bi bi-check-lg"></i>
-                          </Button>
-                          <Button
-                            variant="outline-danger"
-                            onClick={() => handleAccionVale(vale, 'rechazar')}
-                            style={{
-                              borderRadius: '0 8px 8px 0',
-                              fontWeight: 600,
-                              border: '2px solid #ef4444',
-                              borderLeft: 'none',
-                              color: '#ef4444'
-                            }}
-                          >
-                            <i className="bi bi-x-lg"></i>
-                          </Button>
-                        </ButtonGroup>
-                      </td>
+                      </th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Fecha</th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Tipo</th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Concepto</th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Valor</th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Profesional</th>
+                      <th style={{ border: 'none', padding: '16px', fontWeight: 600, color: '#374151' }}>Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {valesPendientes.map((vale, index) => (
+                      <tr key={vale.id} style={{
+                        borderBottom: index === valesPendientes.length - 1 ? 'none' : '1px solid #f1f5f9',
+                        transition: 'all 0.2s',
+                      }}>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <Form.Check
+                            type="checkbox"
+                            checked={valesSeleccionados.includes(vale.id)}
+                            onChange={() => toggleSeleccionVale(vale.id)}
+                          />
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                              {vale.fecha.toLocaleDateString()}
+                            </div>
+                            <small style={{ color: '#64748b' }}>
+                              {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </small>
+                          </div>
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <Badge 
+                            bg={vale.tipo === 'servicio' ? 'primary' : 'danger'}
+                            style={{
+                              borderRadius: 12,
+                              padding: '8px 12px',
+                              fontWeight: 600
+                            }}
+                          >
+                            <i className={`bi ${vale.tipo === 'servicio' ? 'bi-scissors' : 'bi-cash-coin'} me-1`}></i>
+                            {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
+                          </Badge>
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                            {vale.servicio || vale.concepto || '-'}
+                          </div>
+                          {vale.descripcion && (
+                            <small style={{ color: '#64748b' }}>{vale.descripcion}</small>
+                          )}
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <div style={{
+                            fontWeight: 700,
+                            fontSize: '1.1rem',
+                            color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'
+                          }}>
+                            ${Number(vale.valor).toLocaleString()}
+                          </div>
+                          {vale.comisionExtra && Number(vale.comisionExtra) > 0 && (
+                            <small style={{ color: '#059669' }}>
+                              +${Number(vale.comisionExtra).toLocaleString()} extra
+                            </small>
+                          )}
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                            {vale.peluqueroNombre || vale.peluquero || 'Profesional'}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                            {vale.peluqueroEmail}
+                          </div>
+                          {vale.cliente && (
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 4 }}>
+                              Cliente: {vale.cliente}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ border: 'none', padding: '16px' }}>
+                          <ButtonGroup size="sm">
+                            <Button
+                              variant="outline-success"
+                              onClick={() => handleAccionVale(vale, 'aprobar')}
+                              style={{
+                                borderRadius: '8px 0 0 8px',
+                                fontWeight: 600,
+                                border: '2px solid #16a34a',
+                                color: '#16a34a'
+                              }}
+                            >
+                              <i className="bi bi-check-lg"></i>
+                            </Button>
+                            <Button
+                              variant="outline-danger"
+                              onClick={() => handleAccionVale(vale, 'rechazar')}
+                              style={{
+                                borderRadius: '0 8px 8px 0',
+                                fontWeight: 600,
+                                border: '2px solid #ef4444',
+                                borderLeft: 'none',
+                                color: '#ef4444'
+                              }}
+                            >
+                              <i className="bi bi-x-lg"></i>
+                            </Button>
+                          </ButtonGroup>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+
+              {/* Vista móvil condicional */}
+              <div className="d-md-none">
+                {modoTarjeta ? (
+                  /* Vista de tarjeta individual - Solo en móvil */
+                  <div style={{ padding: '24px' }}>
+                    {(() => {
+                      const valeActual = valesPendientes[indiceActual];
+                      if (!valeActual) return null;
+                      
+                      return (
+                        <>
+                          {/* Navegación superior */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 24,
+                            padding: '16px 20px',
+                            background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                            borderRadius: 16,
+                            border: '1px solid #e2e8f0'
+                          }}>
+                            <Button
+                              variant="outline-secondary"
+                              onClick={anteriorVale}
+                              disabled={indiceActual === 0}
+                              style={{ borderRadius: 12, padding: '8px 16px' }}
+                            >
+                              <i className="bi bi-chevron-left me-2"></i>
+                              Anterior
+                            </Button>
+                            
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1e293b' }}>
+                                Vale {indiceActual + 1} de {valesPendientes.length}
+                              </div>
+                              <div style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                                Desliza para aprobar rápidamente
+                              </div>
+                            </div>
+                            
+                            <Button
+                              variant="outline-secondary"
+                              onClick={siguienteVale}
+                              disabled={indiceActual === valesPendientes.length - 1}
+                              style={{ borderRadius: 12, padding: '8px 16px' }}
+                            >
+                              Siguiente
+                              <i className="bi bi-chevron-right ms-2"></i>
+                            </Button>
+                          </div>
+
+                          {/* Indicadores de progreso */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            gap: 4,
+                            marginBottom: 24
+                          }}>
+                            {valesPendientes.slice(0, Math.min(10, valesPendientes.length)).map((_, index) => (
+                              <button
+                                key={index}
+                                onClick={() => irAVale(index)}
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  border: 'none',
+                                  background: index === indiceActual ? '#8b5cf6' : '#e2e8f0',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease'
+                                }}
+                              />
+                            ))}
+                            {valesPendientes.length > 10 && (
+                              <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: 8 }}>
+                                +{valesPendientes.length - 10} más
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Tarjeta principal - Más compacta */}
+                          <Card style={{
+                            border: `2px solid ${valeActual.tipo === 'servicio' ? '#8b5cf6' : '#ef4444'}`,
+                            borderRadius: 16,
+                            background: 'white',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            overflow: 'hidden',
+                            maxWidth: 400,
+                            margin: '0 auto'
+                          }}>
+                            {/* Header compacto */}
+                            <div style={{
+                              background: valeActual.tipo === 'servicio' 
+                                ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                              color: 'white',
+                              padding: '16px',
+                              textAlign: 'center'
+                            }}>
+                              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 4 }}>
+                                <i className={`bi ${valeActual.tipo === 'servicio' ? 'bi-scissors' : 'bi-cash-coin'} me-2`}></i>
+                                {valeActual.tipo === 'servicio' ? 'Vale de Servicio' : 'Vale de Gasto'}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                                {valeActual.fecha.toLocaleDateString()} - {valeActual.fecha.toLocaleTimeString([], { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit' 
+                                })}
+                              </div>
+                            </div>
+
+                            <Card.Body style={{ padding: '20px' }}>
+                              {/* Información del profesional - Prioritaria */}
+                              <div style={{
+                                background: '#f8fafc',
+                                padding: '12px',
+                                borderRadius: 12,
+                                marginBottom: 16,
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12
+                              }}>
+                                <div style={{
+                                  width: 40,
+                                  height: 40,
+                                  background: valeActual.tipo === 'servicio' ? '#8b5cf6' : '#ef4444',
+                                  borderRadius: '50%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: 'white',
+                                  fontSize: '1.2rem'
+                                }}>
+                                  <i className="bi bi-person"></i>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>
+                                    {valeActual.peluqueroNombre || valeActual.peluquero || 'Profesional'}
+                                  </div>
+                                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                    {valeActual.peluqueroEmail}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Concepto y valor en layout vertical compacto */}
+                              <div style={{ marginBottom: 16 }}>
+                                <div style={{ 
+                                  fontSize: '1.1rem', 
+                                  fontWeight: 600, 
+                                  color: '#1e293b',
+                                  marginBottom: 8,
+                                  textAlign: 'center'
+                                }}>
+                                  {valeActual.servicio || valeActual.concepto || 'Sin descripción'}
+                                </div>
+                                
+                                {/* Valor destacado compacto */}
+                                <div style={{
+                                  background: valeActual.tipo === 'servicio' 
+                                    ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
+                                    : 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
+                                  padding: '12px',
+                                  borderRadius: 12,
+                                  textAlign: 'center',
+                                  border: valeActual.tipo === 'servicio' 
+                                    ? '2px solid #22c55e'
+                                    : '2px solid #ef4444'
+                                }}>
+                                  <div style={{
+                                    fontSize: '1.8rem',
+                                    fontWeight: 800,
+                                    color: valeActual.tipo === 'servicio' ? '#15803d' : '#dc2626',
+                                    marginBottom: 4
+                                  }}>
+                                    ${Number(valeActual.valor).toLocaleString()}
+                                  </div>
+                                  {valeActual.comisionExtra && Number(valeActual.comisionExtra) > 0 && (
+                                    <div style={{ 
+                                      fontSize: '0.85rem', 
+                                      color: '#059669',
+                                      fontWeight: 600
+                                    }}>
+                                      +${Number(valeActual.comisionExtra).toLocaleString()} extra
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Cliente si existe */}
+                              {valeActual.cliente && (
+                                <div style={{
+                                  background: 'white',
+                                  padding: '8px 12px',
+                                  borderRadius: 8,
+                                  border: '1px solid #e2e8f0',
+                                  marginBottom: 16
+                                }}>
+                                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 2 }}>
+                                    Cliente:
+                                  </div>
+                                  <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.9rem' }}>
+                                    {valeActual.cliente}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Botones de acción apilados verticalmente */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <Button
+                                  variant="success"
+                                  onClick={() => handleAccionVale(valeActual, 'aprobar')}
+                                  style={{
+                                    borderRadius: 12,
+                                    fontWeight: 600,
+                                    fontSize: '0.95rem',
+                                    width: '100%',
+                                    padding: '10px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                    boxShadow: '0 2px 8px rgba(34, 197, 94, 0.3)'
+                                  }}
+                                >
+                                  <i className="bi bi-check-circle me-2"></i>
+                                  Aprobar
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  onClick={() => handleAccionVale(valeActual, 'rechazar')}
+                                  style={{
+                                    borderRadius: 12,
+                                    fontWeight: 600,
+                                    fontSize: '0.95rem',
+                                    width: '100%',
+                                    padding: '10px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
+                                  }}
+                                >
+                                  <i className="bi bi-x-circle me-2"></i>
+                                  Rechazar
+                                </Button>
+                              </div>
+                            </Card.Body>
+                          </Card>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* Vista de tabla simplificada para móvil cuando no está en modo tarjeta */
+                  <div style={{ overflowX: 'auto' }}>
+                    <Table hover className="mb-0">
+                      <thead style={{
+                        background: '#f8fafc',
+                        borderTop: '1px solid #e2e8f0'
+                      }}>
+                        <tr>
+                          <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Vale</th>
+                          <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Valor</th>
+                          <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {valesPendientes.map((vale, index) => (
+                          <tr key={vale.id} style={{
+                            borderBottom: index === valesPendientes.length - 1 ? 'none' : '1px solid #f1f5f9',
+                          }}>
+                            <td style={{ border: 'none', padding: '12px' }}>
+                              <div>
+                                <Badge 
+                                  bg={vale.tipo === 'servicio' ? 'primary' : 'danger'}
+                                  style={{ borderRadius: 8, fontSize: '0.7rem', marginBottom: 4 }}
+                                >
+                                  {vale.tipo === 'servicio' ? 'Servicio' : 'Gasto'}
+                                </Badge>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>
+                                  {vale.servicio || vale.concepto || '-'}
+                                </div>
+                                <small style={{ color: '#64748b' }}>
+                                  {vale.peluqueroNombre || vale.peluquero || 'Profesional'} - {vale.peluqueroEmail}
+                                </small>
+                              </div>
+                            </td>
+                            <td style={{ border: 'none', padding: '12px' }}>
+                              <div style={{
+                                fontWeight: 700,
+                                fontSize: '1rem',
+                                color: vale.tipo === 'servicio' ? '#16a34a' : '#ef4444'
+                              }}>
+                                ${Number(vale.valor).toLocaleString()}
+                              </div>
+                            </td>
+                            <td style={{ border: 'none', padding: '12px' }}>
+                              <div className="d-flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline-success"
+                                  onClick={() => handleAccionVale(vale, 'aprobar')}
+                                  style={{
+                                    borderRadius: 8,
+                                    padding: '4px 8px',
+                                    border: '1px solid #16a34a'
+                                  }}
+                                >
+                                  <i className="bi bi-check"></i>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline-danger"
+                                  onClick={() => handleAccionVale(vale, 'rechazar')}
+                                  style={{
+                                    borderRadius: 8,
+                                    padding: '4px 8px',
+                                    border: '1px solid #ef4444'
+                                  }}
+                                >
+                                  <i className="bi bi-x"></i>
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </Card.Body>
       </Card>
@@ -664,11 +1068,8 @@ function AprobarValesServicio() {
                 {valeActual.tipo === 'servicio' ? 'Vale de Servicio' : 'Vale de Gasto'}
               </div>
               <div><strong>Concepto:</strong> {valeActual.servicio || valeActual.concepto}</div>
-              <div><strong>Valor base:</strong> ${Number(valeActual.valor).toLocaleString()}</div>
-              {valeActual.comisionExtra && Number(valeActual.comisionExtra) > 0 && (
-                <div><strong>Comisión actual:</strong> ${Number(valeActual.comisionExtra).toLocaleString()}</div>
-              )}
-              <div><strong>Profesional:</strong> {valeActual.peluqueroNombre || valeActual.peluqueroEmail}</div>
+              <div><strong>Valor:</strong> ${Number(valeActual.valor).toLocaleString()}</div>
+              <div><strong>Profesional:</strong> {valeActual.peluqueroNombre || valeActual.peluquero || 'Profesional'} ({valeActual.peluqueroEmail})</div>
             </Alert>
           )}
 
@@ -726,63 +1127,17 @@ function AprobarValesServicio() {
                         <option value="45">📊 Dividir 45/55 (45% profesional, 55% empresa)</option>
                       </Form.Select>
                     </Form.Group>
-
-                    <Form.Group className="mb-3">
-                      <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
-                        <i className="bi bi-plus-circle me-2"></i>
-                        Comisión Extra (opcional)
-                      </Form.Label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{
-                          position: 'absolute',
-                          left: 12,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          color: '#6b7280',
-                          fontWeight: 600,
-                          zIndex: 1
-                        }}>$</span>
-                        <Form.Control
-                          type="number"
-                          min={0}
-                          value={comisionExtra}
-                          onChange={e => setComisionExtra(e.target.value)}
-                          placeholder="0"
-                          style={{ 
-                            borderRadius: 12,
-                            paddingLeft: 28,
-                            fontWeight: 600
-                          }}
-                        />
-                      </div>
-                      <Form.Text style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                        <i className="bi bi-info-circle me-1"></i>
-                        Esta comisión se suma al valor total y no se divide
-                      </Form.Text>
-                    </Form.Group>
                     
-                    {(dividirPorDos !== '100' || (comisionExtra && Number(comisionExtra) > 0)) && (
+                    {dividirPorDos !== '100' && (
                       <Alert variant="info" style={{ borderRadius: 12, margin: 0 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                          💰 Cálculo detallado del vale:
-                        </div>
-                        <div style={{ marginBottom: 4 }}>
-                          <strong>Valor base:</strong> ${Number(valeActual.valor).toLocaleString()}
-                        </div>
-                        {comisionExtra && Number(comisionExtra) > 0 && (
-                          <div style={{ marginBottom: 4 }}>
-                            <strong>Comisión extra:</strong> ${Number(comisionExtra).toLocaleString()}
-                          </div>
-                        )}
-                        <hr style={{ margin: '8px 0', opacity: 0.3 }} />
-                        <div style={{ marginBottom: 4 }}>
-                          👤 <strong>Profesional recibe:</strong> ${(((Number(valeActual.valor) * Number(dividirPorDos)) / 100) + (Number(comisionExtra) || 0)).toLocaleString()}
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                          💰 Distribución del vale:
                         </div>
                         <div>
-                          🏢 <strong>Empresa recibe:</strong> ${((Number(valeActual.valor) * (100 - Number(dividirPorDos))) / 100).toLocaleString()}
+                          👤 Profesional: <strong>{dividirPorDos}%</strong> = ${((Number(valeActual.valor) * Number(dividirPorDos)) / 100).toLocaleString()}
                         </div>
-                        <div style={{ marginTop: 8, fontWeight: 700, color: '#059669' }}>
-                          🎯 <strong>Total vale:</strong> ${(Number(valeActual.valor) + (Number(comisionExtra) || 0)).toLocaleString()}
+                        <div>
+                          🏢 Empresa: <strong>{100 - Number(dividirPorDos)}%</strong> = ${((Number(valeActual.valor) * (100 - Number(dividirPorDos))) / 100).toLocaleString()}
                         </div>
                       </Alert>
                     )}

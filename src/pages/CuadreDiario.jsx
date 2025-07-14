@@ -58,16 +58,9 @@ function CuadreDiario() {
     let unsub1, unsub2;
     let isMounted = true;
 
-    console.log('🔄 CuadreDiario - Iniciando carga de datos...');
-
     const updateVales = () => {
       if (isMounted) {
         const todos = [...valesServicio, ...valesGasto];
-        console.log('📊 CuadreDiario - Actualizando vales:', {
-          valesServicio: valesServicio.length,
-          valesGasto: valesGasto.length,
-          total: todos.length
-        });
         setVales(todos);
 
         const usuariosUnicos = Array.from(
@@ -78,7 +71,6 @@ function CuadreDiario() {
     };
 
     unsub1 = onSnapshot(collection(db, 'vales_servicio'), snap => {
-      console.log('🟢 CuadreDiario - Vales de servicio obtenidos:', snap.size);
       valesServicio = [];
       snap.forEach(doc => {
         const data = doc.data();
@@ -94,11 +86,9 @@ function CuadreDiario() {
     });
 
     unsub2 = onSnapshot(collection(db, 'vales_gasto'), snap => {
-      console.log('🔴 CuadreDiario - Vales de gasto obtenidos:', snap.size);
       valesGasto = [];
       snap.forEach(doc => {
         const data = doc.data();
-        console.log('🔴 Vale de gasto individual:', doc.id, data);
         valesGasto.push({
           ...data,
           tipo: 'Egreso',
@@ -106,7 +96,6 @@ function CuadreDiario() {
           fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
         });
       });
-      console.log('🔴 Total vales de gasto procesados:', valesGasto.length);
       updateVales();
       setLoading(false);
     });
@@ -392,16 +381,6 @@ function CuadreDiario() {
     return true;
   });
 
-  console.log('🔍 CuadreDiario - Filtrado de vales:', {
-    totalVales: vales.length,
-    valesFiltrados: valesFiltrados.length,
-    egresos: vales.filter(v => v.tipo === 'Egreso').length,
-    egresosFiltrados: valesFiltrados.filter(v => v.tipo === 'Egreso').length,
-    filtros: filtros,
-    desde: desde,
-    hasta: hasta
-  });
-
   const totalIngresos = valesFiltrados
     .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
@@ -418,19 +397,6 @@ function CuadreDiario() {
   const totalEgresosPendientes = valesFiltrados
     .filter(v => v.tipo === 'Egreso' && v.estado === 'pendiente')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
-
-  console.log('💰 CuadreDiario - Cálculos financieros detallados:', {
-    valesIngreso: valesFiltrados.filter(v => v.tipo === 'Ingreso').length,
-    valesEgreso: valesFiltrados.filter(v => v.tipo === 'Egreso').length,
-    valesIngresoAprobados: valesFiltrados.filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado').length,
-    valesEgresoAprobados: valesFiltrados.filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado').length,
-    valesIngresoPendientes: valesFiltrados.filter(v => v.tipo === 'Ingreso' && v.estado === 'pendiente').length,
-    valesEgresoPendientes: valesFiltrados.filter(v => v.tipo === 'Egreso' && v.estado === 'pendiente').length,
-    totalIngresos: totalIngresos,
-    totalEgresos: totalEgresos,
-    totalIngresosPendientes: totalIngresosPendientes,
-    totalEgresosPendientes: totalEgresosPendientes
-  });
 
   const saldoNeto = totalIngresos - totalEgresos;
 

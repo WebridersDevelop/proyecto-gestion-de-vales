@@ -8,7 +8,6 @@ const buttonStyles = {
     minWidth: 140,
     minHeight: 140,
     fontSize: 16,
-    border: 'none',
     borderRadius: 20,
     boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
     display: 'flex',
