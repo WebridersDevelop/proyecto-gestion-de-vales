@@ -32,11 +32,9 @@ function ValesServicio() {
         // Determinar si mostrar el vale según el rol
         let mostrarVale = false;
         
-        if (['admin', 'anfitrion'].includes(rol)) {
-          // Admin y anfitrion ven todos los vales
-          mostrarVale = true;
-        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
-          // Barberos, estilistas y estetica ven sus propios vales
+        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
+          // TODOS los roles autorizados SOLO ven SUS PROPIOS vales
+          // Comparación estricta de UID para garantizar privacidad total
           mostrarVale = (data.peluqueroUid === user.uid);
         }
         
@@ -65,11 +63,9 @@ function ValesServicio() {
         // Determinar si mostrar el vale según el rol
         let mostrarVale = false;
         
-        if (['admin', 'anfitrion'].includes(rol)) {
-          // Admin y anfitrion ven todos los vales de gasto
-          mostrarVale = true;
-        } else if (['barbero', 'estilista', 'estetica'].includes(rol)) {
-          // Barberos, estilistas y estetica ven sus propios vales de gasto
+        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
+          // TODOS los roles autorizados SOLO ven SUS PROPIOS vales de gasto
+          // Comparación estricta de UID para garantizar privacidad total
           mostrarVale = (data.peluqueroUid === user.uid);
         }
         
@@ -263,24 +259,23 @@ function ValesServicio() {
                       Vales de Servicio
                     </h4>
                     <p className="mb-0 opacity-90" style={{ fontSize: '0.95rem' }}>
-                      {['admin', 'anfitrion'].includes(rol) 
-                        ? 'Gestiona todos los vales de servicio' 
-                        : 'Registra tus servicios realizados'
-                      }
+                      Vista personal: Solo tus servicios realizados
                     </p>
                   </div>
-                  <div className="text-end">
-                    <div style={{ 
-                      background: 'rgba(255,255,255,0.15)', 
-                      padding: '8px 12px', 
-                      borderRadius: '8px',
-                      backdropFilter: 'blur(10px)'
-                    }}>
-                      <small className="d-block opacity-90">
-                        {fechaFiltro ? `Registros del ${fechaFiltro}` : 'Total registros'}
-                      </small>
-                      <strong style={{ fontSize: '1.2rem' }}>{valesFiltrados.length}</strong>
-                    </div>
+                  <div className="text-end">                        <div style={{ 
+                          background: 'rgba(255,255,255,0.15)', 
+                          padding: '8px 12px', 
+                          borderRadius: '8px',
+                          backdropFilter: 'blur(10px)'
+                        }}>
+                          <small className="d-block opacity-90">
+                            {fechaFiltro 
+                              ? `Tus registros del ${fechaFiltro}` 
+                              : 'Tus registros totales'
+                            }
+                          </small>
+                          <strong style={{ fontSize: '1.2rem' }}>{valesFiltrados.length}</strong>
+                        </div>
                   </div>
                 </div>
               </div>
@@ -490,8 +485,10 @@ function ValesServicio() {
                         }}>
                         <div style={{ color: '#166534', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
-                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) ? 'Ingresos de hoy' : 'Ingresos del día')
-                            : 'Total ingresos'
+                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                ? 'Mis ingresos hoy'
+                                : 'Mis ingresos del día')
+                            : 'Mis ingresos totales'
                           }
                         </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#14532d' }}>
@@ -509,8 +506,10 @@ function ValesServicio() {
                         }}>
                         <div style={{ color: '#92400e', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
-                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) ? 'Gastos de hoy' : 'Gastos del día')
-                            : 'Total gastos'
+                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                ? 'Mis gastos hoy'
+                                : 'Mis gastos del día')
+                            : 'Mis gastos totales'
                           }
                         </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#78350f' }}>
@@ -527,7 +526,7 @@ function ValesServicio() {
                           border: `1px solid ${acumuladoNeto >= 0 ? '#86efac' : '#fca5a5'}`
                         }}>
                           <div style={{ color: acumuladoNeto >= 0 ? '#166534' : '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
-                            Neto
+                            Mi neto
                           </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: acumuladoNeto >= 0 ? '#14532d' : '#7f1d1d' }}>
                             ${acumuladoNeto.toLocaleString()}
@@ -559,19 +558,11 @@ function ValesServicio() {
                         fontSize: '1rem'
                       }}>
                         <i className="bi bi-list-ul me-2 text-primary"></i>
-                        {['admin', 'anfitrion'].includes(rol) 
-                          ? (fechaFiltro 
-                              ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
-                                  ? 'Todos los vales de hoy' 
-                                  : `Todos los vales del ${fechaFiltro}`)
-                              : 'Todos los vales'
-                            )
-                          : (fechaFiltro 
-                              ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
-                                  ? 'Tus vales de hoy' 
-                                  : `Tus vales del ${fechaFiltro}`)
-                              : 'Todos tus vales'
-                            )
+                        {fechaFiltro 
+                          ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                              ? 'Mis vales de hoy' 
+                              : `Mis vales del ${fechaFiltro}`)
+                          : 'Todos mis vales'
                         }
                       </h6>
                       <span style={{ 
@@ -604,9 +595,6 @@ function ValesServicio() {
                           <tr>
                             {/* Columnas adaptativas según el tamaño de pantalla */}
                             <th className="d-none d-md-table-cell" style={{padding: '8px 12px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Código</th>
-                            {['admin', 'anfitrion'].includes(rol) && (
-                              <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Profesional</th>
-                            )}
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Servicio</th>
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Valor</th>
                             <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>%</th>
@@ -621,7 +609,7 @@ function ValesServicio() {
                         <tbody>
                           {valesFiltrados.length === 0 ? (
                             <tr>
-                              <td colSpan={['admin', 'anfitrion'].includes(rol) ? 11 : 10} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
+                              <td colSpan={10} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
                                 <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
                                 {fechaFiltro 
                                   ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
@@ -647,19 +635,6 @@ function ValesServicio() {
                                     {vale.codigo || 'S-000'}
                                   </strong>
                                 </td>
-                                
-                                {/* Profesional - Solo para admin/anfitrion en pantallas lg+ */}
-                                {['admin', 'anfitrion'].includes(rol) && (
-                                  <td className="d-none d-lg-table-cell" style={{padding: '8px 6px'}}>
-                                    <span style={{ 
-                                      color: '#059669', 
-                                      fontWeight: 600, 
-                                      fontSize: '0.75rem' 
-                                    }}>
-                                      {vale.peluquero || 'Sin nombre'}
-                                    </span>
-                                  </td>
-                                )}
                                 
                                 {/* Servicio - Siempre visible pero más compacto en móvil */}
                                 <td style={{padding: '8px 6px', color: '#374151', maxWidth: '120px'}}>
