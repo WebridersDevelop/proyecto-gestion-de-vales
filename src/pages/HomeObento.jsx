@@ -312,7 +312,7 @@ function HomeObento() {
               <i className="bi bi-info-circle me-2" style={{ color: '#6366f1', fontSize: 16 }}></i>
               <span className="me-2">Versión</span>
               <Badge bg="primary" style={{ fontSize: 12, fontWeight: 700 }}>
-                v2.0.0
+                v2.1.0
               </Badge>
             </div>
 

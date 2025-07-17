@@ -1,10 +1,58 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { Card, Row, Col, Spinner, Alert, Table, Form, Button, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Componente separado para edición de celdas
+const CeldaEditableExterna = ({ esEditable, valorActual, onCambio, tipo = 'text', opciones = null }) => {
+  if (!esEditable) {
+    return <span>{valorActual || '-'}</span>;
+  }
+
+  if (opciones) {
+    return (
+      <Form.Select
+        size="sm"
+        value={valorActual || ''}
+        onChange={e => onCambio(e.target.value)}
+        style={{ fontSize: 12, minWidth: 100 }}
+      >
+        <option value="">-</option>
+        {opciones.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </Form.Select>
+    );
+  }
+
+  if (tipo === 'checkbox') {
+    return (
+      <Form.Check
+        type="checkbox"
+        checked={valorActual === true || valorActual === 'true'}
+        onChange={e => onCambio(e.target.checked)}
+      />
+    );
+  }
+
+  return (
+    <Form.Control
+      size="sm"
+      type={tipo}
+      value={valorActual || ''}
+      onChange={e => onCambio(e.target.value)}
+      style={{ 
+        fontSize: 12, 
+        minWidth: tipo === 'number' ? 80 : 120,
+        padding: '2px 6px'
+      }}
+      autoComplete="off"
+    />
+  );
+};
 
 function CuadreDiario() {
   const [vales, setVales] = useState([]);
@@ -17,6 +65,12 @@ function CuadreDiario() {
   const [vista, setVista] = useState('cards'); // <-- Por Profesional es la vista por defecto
   const [ordenColumna, setOrdenColumna] = useState('fecha');
   const [ordenDireccion, setOrdenDireccion] = useState('desc');
+  
+  // Estados para edición inline
+  const [editandoVale, setEditandoVale] = useState(null);
+  const [valoresEditados, setValoresEditados] = useState({});
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState('');
   function getHoyLocal() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -30,7 +84,7 @@ function CuadreDiario() {
   function getMontoPercibido(vale) {
     if (vale.tipo === 'Ingreso' && vale.estado === 'aprobado') {
       // Determinar el porcentaje que le corresponde al profesional
-      let porcentajeProfesional = 100; // Por defecto 100%
+      let porcentajeProfesional = 50; // Por defecto 50%
       
       if (vale.dividirPorDos) {
         if (typeof vale.dividirPorDos === 'string') {
@@ -127,6 +181,97 @@ function CuadreDiario() {
     }
   };
 
+  // --- FUNCIONES PARA EDICIÓN INLINE ---
+  const iniciarEdicion = (vale) => {
+    setEditandoVale(vale.id);
+    
+    // Determinar el porcentaje actual
+    let porcentajeActual = 50;
+    if (vale.dividirPorDos) {
+      if (typeof vale.dividirPorDos === 'string') {
+        porcentajeActual = Number(vale.dividirPorDos);
+      } else if (vale.dividirPorDos === true) {
+        porcentajeActual = 50;
+      }
+    }
+    
+    // Cargar todos los valores existentes del vale
+    setValoresEditados({
+      codigo: vale.codigo || '',
+      peluquero: vale.peluquero || '',
+      fecha: vale.fecha ? vale.fecha.toISOString().split('T')[0] : '',
+      tipo: vale.tipo || '',
+      valor: vale.valor || '',
+      servicio: vale.servicio || vale.concepto || '',
+      concepto: vale.concepto || vale.servicio || '',
+      observacion: vale.observacion || '',
+      comisionExtra: vale.comisionExtra || '',
+      dividirPorDos: porcentajeActual,
+      local: vale.local || '',
+      formaPago: vale.formaPago || '',
+      estado: vale.estado || 'pendiente'
+    });
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoVale(null);
+    setValoresEditados({});
+  };
+
+  const guardarEdicion = async (vale) => {
+    if (guardando) return;
+    
+    setGuardando(true);
+    try {
+      const coleccion = vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto';
+      const valeRef = doc(db, coleccion, vale.id);
+      
+      // Preparar los datos a actualizar
+      const datosActualizar = {
+        valor: Number(valoresEditados.valor) || 0,
+        observacion: valoresEditados.observacion || '',
+        local: valoresEditados.local || '',
+        formaPago: valoresEditados.formaPago || ''
+      };
+
+      // Agregar campos específicos según el tipo
+      if (vale.tipo === 'Ingreso') {
+        datosActualizar.servicio = valoresEditados.servicio || '';
+        datosActualizar.comisionExtra = Number(valoresEditados.comisionExtra) || 0;
+        datosActualizar.dividirPorDos = valoresEditados.dividirPorDos;
+      } else {
+        datosActualizar.concepto = valoresEditados.servicio || '';
+      }
+
+      await updateDoc(valeRef, datosActualizar);
+      
+      // Actualizar el estado local
+      setVales(vales => vales.map(v => 
+        v.id === vale.id ? { ...v, ...datosActualizar } : v
+      ));
+      
+      setEditandoVale(null);
+      setValoresEditados({});
+      
+      // Mostrar mensaje de éxito
+      setMensaje('✅ Vale actualizado correctamente');
+      setTimeout(() => setMensaje(''), 3000);
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      setMensaje('❌ Error al guardar los cambios');
+      setTimeout(() => setMensaje(''), 5000);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleCambioValor = (campo, valor) => {
+    setValoresEditados(prev => ({
+      ...prev,
+      [campo]: valor
+    }));
+  };
+
   // --- EXPORTAR PDF ---
   const handleExportPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape' });
@@ -154,31 +299,32 @@ function CuadreDiario() {
       return a.fecha - b.fecha;
     });
 
-    // 3. Resumen general
-    const totalIngresos = valesFiltradosPDF
+    // 3. Resumen general desde la perspectiva del local
+    const ingresosLocal = valesFiltradosPDF
       .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
       .reduce((a, v) => a + (Number(v.valor) || 0), 0);
 
-    const totalEgresos = valesFiltradosPDF
+    const montoPercibidoLocal = valesFiltradosPDF
+      .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+      .reduce((a, v) => {
+        const totalServicio = Number(v.valor) || 0;
+        const montoProfesional = getMontoPercibido(v);
+        return a + (totalServicio - montoProfesional);
+      }, 0);
+
+    const montoPercibidoProfesionales = valesFiltradosPDF
+      .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+      .reduce((a, v) => a + getMontoPercibido(v), 0);
+
+    const solicitudesProfesionales = valesFiltradosPDF
       .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
       .reduce((a, v) => a + (Number(v.valor) || 0), 0);
 
-    const saldoNeto = totalIngresos - totalEgresos;
+    const gananciaNegocio = montoPercibidoLocal;
 
     const totalPendiente = valesFiltradosPDF
       .filter(v => v.estado === 'pendiente')
       .reduce((a, v) => a + (Number(v.valor) || 0) * (v.tipo === 'Ingreso' ? 1 : -1), 0);
-
-    const totalPercibido = valesFiltradosPDF
-      .filter(v => v.estado === 'aprobado')
-      .reduce((a, v) => {
-        if (v.tipo === 'Ingreso') {
-          return a + getMontoPercibido(v);
-        } else if (v.tipo === 'Egreso') {
-          return a - (Number(v.valor) || 0);
-        }
-        return a;
-      }, 0);
 
     let startY = 20;
 
@@ -193,15 +339,16 @@ function CuadreDiario() {
     doc.text(`Período: ${desde} - ${hasta}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
     startY += 12;
 
-    // RESUMEN GENERAL EN FORMATO TABLA COMPACTA
+    // RESUMEN GENERAL EN FORMATO TABLA COMPACTA - PERSPECTIVA DEL LOCAL
     const resumenData = [
-      ['Ingresos', 'Egresos', 'Saldo Neto', 'Pendiente', 'M. Percibido'],
+      ['Total Facturado', 'Monto Local', 'Comisiones Prof.', 'Solicitudes Prof.', 'Ganancia Local', 'Pendiente'],
       [
-        `$${totalIngresos.toLocaleString()}`,
-        `$${totalEgresos.toLocaleString()}`,
-        `$${saldoNeto.toLocaleString()}`,
-        `$${totalPendiente.toLocaleString()}`,
-        `$${totalPercibido.toLocaleString()}`
+        `$${ingresosLocal.toLocaleString()}`,
+        `$${montoPercibidoLocal.toLocaleString()}`,
+        `$${montoPercibidoProfesionales.toLocaleString()}`,
+        `$${solicitudesProfesionales.toLocaleString()}`,
+        `$${gananciaNegocio.toLocaleString()}`,
+        `$${totalPendiente.toLocaleString()}`
       ]
     ];
 
@@ -216,11 +363,12 @@ function CuadreDiario() {
         fontStyle: 'bold'
       },
       columnStyles: {
-        0: { fillColor: [220, 252, 231], textColor: [22, 163, 74] }, // Verde para ingresos
-        1: { fillColor: [254, 226, 226], textColor: [220, 53, 69] }, // Rojo para egresos
-        2: { fillColor: saldoNeto >= 0 ? [220, 252, 231] : [254, 226, 226], textColor: saldoNeto >= 0 ? [22, 163, 74] : [220, 53, 69] }, // Verde/Rojo según saldo
-        3: { fillColor: [255, 237, 213], textColor: [245, 158, 66] }, // Naranja para pendiente
-        4: { fillColor: [224, 231, 255], textColor: [99, 102, 241] } // Azul para monto percibido
+        0: { fillColor: [220, 252, 231], textColor: [22, 163, 74] }, // Verde para total facturado
+        1: { fillColor: [219, 234, 254], textColor: [37, 99, 235] }, // Azul para monto del local
+        2: { fillColor: [254, 226, 226], textColor: [220, 53, 69] }, // Rojo para comisiones profesionales
+        3: { fillColor: [255, 237, 213], textColor: [245, 158, 66] }, // Naranja para solicitudes
+        4: { fillColor: gananciaNegocio >= 0 ? [220, 252, 231] : [254, 226, 226], textColor: gananciaNegocio >= 0 ? [22, 163, 74] : [220, 53, 69] }, // Verde/Rojo según ganancia
+        5: { fillColor: [255, 237, 213], textColor: [245, 158, 66] } // Naranja para pendiente
       },
       theme: 'grid',
       margin: { left: 50, right: 50 },
@@ -381,24 +529,68 @@ function CuadreDiario() {
     return true;
   });
 
-  const totalIngresos = valesFiltrados
+  // CÁLCULOS DESDE LA PERSPECTIVA DEL LOCAL/NEGOCIO
+  
+  // 1. INGRESOS BRUTOS DEL LOCAL (total facturado a clientes - SIN incluir propinas)
+  const ingresosLocal = valesFiltrados
     .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-    .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+    .reduce((a, v) => {
+      const montoServicio = Number(v.valor) || 0;
+      // Las propinas (comisiones extra) no son facturación del local
+      return a + montoServicio;
+    }, 0);
 
-  const totalEgresos = valesFiltrados
+  // 2. MONTO QUE PERCIBE EL LOCAL (ingresos - comisiones de porcentaje, SIN contar propinas)
+  const montoPercibidoLocal = valesFiltrados
+    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+    .reduce((a, v) => {
+      const totalServicio = Number(v.valor) || 0;
+      // Calcular solo la comisión por porcentaje (sin propinas)
+      let porcentajeProfesional = 50; // Por defecto 50%
+      
+      if (v.dividirPorDos) {
+        if (typeof v.dividirPorDos === 'string') {
+          porcentajeProfesional = Number(v.dividirPorDos);
+        } else if (v.dividirPorDos === true) {
+          porcentajeProfesional = 50;
+        }
+      }
+      
+      const comisionPorcentaje = (totalServicio * porcentajeProfesional) / 100;
+      const montoLocal = totalServicio - comisionPorcentaje;
+      
+      return a + montoLocal;
+    }, 0);
+
+  // 3. MONTO QUE PERCIBEN LOS PROFESIONALES (comisiones por servicios + propinas)
+  const montoPercibidoProfesionales = valesFiltrados
+    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+    .reduce((a, v) => a + getMontoPercibido(v), 0);
+
+  // 3.1. PROPINAS TOTALES (comisiones extra que van 100% al profesional)
+  const totalPropinas = valesFiltrados
+    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
+    .reduce((a, v) => a + (Number(v.comisionExtra) || 0), 0);
+
+  // 4. SOLICITUDES DE DINERO DE PROFESIONALES (egresos = adelantos/préstamos)
+  const solicitudesProfesionales = valesFiltrados
     .filter(v => v.tipo === 'Egreso' && v.estado === 'aprobado')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
+
+  // 5. GANANCIA NETA DEL LOCAL (lo que queda después de pagar comisiones, NO incluye solicitudes)
+  const gananciaNegocio = montoPercibidoLocal;
+
+  // 6. MARGEN REAL DEL LOCAL (porcentaje que efectivamente se queda el negocio)
+  const margenReal = ingresosLocal > 0 ? (montoPercibidoLocal / ingresosLocal) * 100 : 0;
 
   // Totales incluyendo pendientes para mostrar más información
   const totalIngresosPendientes = valesFiltrados
     .filter(v => v.tipo === 'Ingreso' && v.estado === 'pendiente')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
 
-  const totalEgresosPendientes = valesFiltrados
+  const totalSolicitudesPendientes = valesFiltrados
     .filter(v => v.tipo === 'Egreso' && v.estado === 'pendiente')
     .reduce((a, v) => a + (Number(v.valor) || 0), 0);
-
-  const saldoNeto = totalIngresos - totalEgresos;
 
   const totalPendiente = valesFiltrados
     .filter(v => v.estado === 'pendiente')
@@ -411,17 +603,6 @@ function CuadreDiario() {
     if (!agrupados[clave]) agrupados[clave] = [];
     agrupados[clave].push(vale);
   });
-
-  const totalPercibido = valesFiltrados
-    .filter(v => v.estado === 'aprobado')
-    .reduce((a, v) => {
-      if (v.tipo === 'Ingreso') {
-        return a + getMontoPercibido(v);
-      } else if (v.tipo === 'Egreso') {
-        return a - (Number(v.valor) || 0);
-      }
-      return a;
-    }, 0);
 
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
   if (error) return <Alert variant="danger">{error}</Alert>;
@@ -778,8 +959,21 @@ function CuadreDiario() {
                     <Card.Body className="p-4">
                       <div className="d-flex align-items-center justify-content-between mb-3">
                         <div className="d-flex align-items-center">
-                          <i className="bi bi-calculator me-2" style={{ fontSize: 20, color: '#0891b2' }}></i>
-                          <h5 style={{ margin: 0, fontWeight: 600, color: '#1e293b' }}>Resumen Financiero</h5>
+                          <i className="bi bi-building me-2" style={{ fontSize: 20, color: '#0891b2' }}></i>
+                          <h5 style={{ margin: 0, fontWeight: 600, color: '#1e293b' }}>
+                            Resumen Financiero del Local
+                          </h5>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 500,
+                            color: '#64748b',
+                            background: 'rgba(8, 145, 178, 0.1)',
+                            padding: '2px 8px',
+                            borderRadius: 8,
+                            marginLeft: 8
+                          }}>
+                            Perspectiva del Negocio
+                          </span>
                         </div>
                         <small style={{ 
                           color: '#64748b', 
@@ -805,34 +999,14 @@ function CuadreDiario() {
                             border: '2px solid rgba(34, 197, 94, 0.2)'
                           }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#15803d', marginBottom: 8 }}>
-                              <i className="bi bi-arrow-up-circle me-1"></i>Ingresos
+                              <i className="bi bi-cash-stack me-1"></i>Total Facturado
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 700, color: '#166534' }}>
-                              ${totalIngresos.toLocaleString()}
+                              ${ingresosLocal.toLocaleString()}
                             </div>
                             {totalIngresosPendientes > 0 && (
                               <div style={{ fontSize: 11, color: '#15803d', marginTop: 4 }}>
                                 + ${totalIngresosPendientes.toLocaleString()} pendientes
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="col-6 col-md text-center">
-                          <div style={{ 
-                            background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
-                            borderRadius: 16,
-                            padding: 16,
-                            border: '2px solid rgba(239, 68, 68, 0.2)'
-                          }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>
-                              <i className="bi bi-arrow-down-circle me-1"></i>Egresos
-                            </div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: '#991b1b' }}>
-                              ${totalEgresos.toLocaleString()}
-                            </div>
-                            {totalEgresosPendientes > 0 && (
-                              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
-                                + ${totalEgresosPendientes.toLocaleString()} pendientes
                               </div>
                             )}
                           </div>
@@ -845,11 +1019,55 @@ function CuadreDiario() {
                             border: '2px solid rgba(59, 130, 246, 0.2)'
                           }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', marginBottom: 8 }}>
-                              <i className="bi bi-bar-chart me-1"></i>Saldo Neto
+                              <i className="bi bi-building me-1"></i>Monto para el Local
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 700, color: '#1d4ed8' }}>
-                              ${saldoNeto.toLocaleString()}
+                              ${montoPercibidoLocal.toLocaleString()}
                             </div>
+                            <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>
+                              {margenReal.toFixed(1)}% del total facturado
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-6 col-md text-center">
+                          <div style={{ 
+                            background: 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
+                            borderRadius: 16,
+                            padding: 16,
+                            border: '2px solid rgba(239, 68, 68, 0.2)'
+                          }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>
+                              <i className="bi bi-person-dash me-1"></i>Comisiones Profesionales
+                            </div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: '#991b1b' }}>
+                              ${montoPercibidoProfesionales.toLocaleString()}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>
+                              {ingresosLocal > 0 ? ((montoPercibidoProfesionales / ingresosLocal) * 100).toFixed(1) : 0}% del total facturado
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-6 col-md text-center">
+                          <div style={{ 
+                            background: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)',
+                            borderRadius: 16,
+                            padding: 16,
+                            border: '2px solid rgba(251, 146, 60, 0.2)'
+                          }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#ea580c', marginBottom: 8 }}>
+                              <i className="bi bi-wallet me-1"></i>Solicitudes Profesionales
+                            </div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: '#c2410c' }}>
+                              ${solicitudesProfesionales.toLocaleString()}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#ea580c', marginTop: 4 }}>
+                              Adelantos y préstamos solicitados
+                            </div>
+                            {totalSolicitudesPendientes > 0 && (
+                              <div style={{ fontSize: 11, color: '#ea580c', marginTop: 4 }}>
+                                + ${totalSolicitudesPendientes.toLocaleString()} pendientes
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="col-6 col-md text-center">
@@ -860,7 +1078,7 @@ function CuadreDiario() {
                             border: '2px solid rgba(245, 158, 11, 0.2)'
                           }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#d97706', marginBottom: 8 }}>
-                              <i className="bi bi-clock me-1"></i>Pendiente
+                              <i className="bi bi-clock me-1"></i>Pendiente Total
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 700, color: '#92400e' }}>
                               ${totalPendiente.toLocaleString()}
@@ -869,18 +1087,69 @@ function CuadreDiario() {
                         </div>
                         <div className="col-12 col-md text-center">
                           <div style={{ 
-                            background: 'linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)',
+                            background: gananciaNegocio >= 0 ? 
+                              'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : 
+                              'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
                             borderRadius: 16,
                             padding: 16,
-                            border: '2px solid rgba(147, 51, 234, 0.2)'
+                            border: `2px solid ${gananciaNegocio >= 0 ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
                           }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#9333ea', marginBottom: 8 }}>
-                              <i className="bi bi-wallet2 me-1"></i>Monto Percibido
+                            <div style={{ 
+                              fontSize: 13, 
+                              fontWeight: 600, 
+                              color: gananciaNegocio >= 0 ? '#15803d' : '#dc2626', 
+                              marginBottom: 8 
+                            }}>
+                              <i className={`bi ${gananciaNegocio >= 0 ? 'bi-trophy' : 'bi-exclamation-triangle'} me-1`}></i>
+                              Ganancia del Local
                             </div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: '#7c2d12' }}>
-                              ${totalPercibido.toLocaleString()}
+                            <div style={{ 
+                              fontSize: 20, 
+                              fontWeight: 700, 
+                              color: gananciaNegocio >= 0 ? '#166534' : '#991b1b'
+                            }}>
+                              ${gananciaNegocio.toLocaleString()}
+                            </div>
+                            <div style={{ 
+                              fontSize: 11, 
+                              color: gananciaNegocio >= 0 ? '#15803d' : '#dc2626', 
+                              marginTop: 4 
+                            }}>
+                              <small>
+                                💡 Solo incluye facturación por servicios (propinas van directo al profesional)
+                              </small>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+
+              {/* Panel informativo sobre la lógica financiera */}
+              <Row className="mb-4">
+                <Col>
+                  <Card className="border-0" style={{ 
+                    background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                    borderRadius: 16,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}>
+                    <Card.Body className="p-3">
+                      <div className="d-flex align-items-start">
+                        <i className="bi bi-info-circle me-2 mt-1" style={{ fontSize: 16, color: '#6366f1' }}></i>
+                        <div style={{ fontSize: 13, lineHeight: 1.4, color: '#475569' }}>
+                          <strong style={{ color: '#1e293b' }}>Explicación del resumen financiero:</strong>
+                          <br />
+                          • <strong>Total Facturado:</strong> Dinero cobrado por servicios (SIN incluir propinas extras)
+                          <br />
+                          • <strong>Monto para el Local:</strong> Porción del local después de descontar comisiones por porcentaje
+                          <br />
+                          • <strong>Comisiones Profesionales:</strong> Comisiones por porcentaje + propinas extras (traspaso directo cliente → profesional)
+                          <br />
+                          • <strong>Solicitudes Profesionales:</strong> Adelantos, préstamos o retiros solicitados por los profesionales (NO afecta la ganancia del local)
+                          <br />
+                          • <strong>Ganancia del Local:</strong> Utilidad real del negocio (solo del monto facturado por servicios)
                         </div>
                       </div>
                     </Card.Body>
@@ -959,31 +1228,127 @@ function CuadreDiario() {
                     </Card.Body>
                   </Card>
                 ) : (
-                  <Card className="border-0 shadow-sm" style={{ borderRadius: 20 }}>
+                  <Card className="border-0 shadow-sm" style={{ 
+                    borderRadius: 20,
+                    background: 'white',
+                    border: '2px solid #e2e8f0'
+                  }}>
                     <Card.Body className="p-0">
-                      <div className="d-flex align-items-center p-4 pb-0">
-                        <i className="bi bi-table me-2" style={{ fontSize: 20, color: '#6366f1' }}></i>
-                        <h5 style={{ margin: 0, fontWeight: 600, color: '#1e293b' }}>Vista General</h5>
-                        <span style={{ 
-                          marginLeft: 'auto',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: '#64748b',
-                          padding: '4px 12px',
-                          background: '#f1f5f9',
-                          borderRadius: 12
-                        }}>
-                          {valesFiltrados.length} registros
-                        </span>
+                      {/* Header de Vista General mejorado */}
+                      <div style={{
+                        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                        borderRadius: '20px 20px 0 0',
+                        padding: 20,
+                        color: 'white',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        {/* Decoración de fondo */}
+                        <div style={{
+                          position: 'absolute',
+                          top: -20,
+                          right: -20,
+                          width: 100,
+                          height: 100,
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          borderRadius: '50%'
+                        }}></div>
+                        
+                        <div className="d-flex align-items-center justify-content-between mb-3">
+                          <div>
+                            <h4 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+                              <i className="bi bi-table me-2" style={{ fontSize: 24 }}></i>
+                              Vista General
+                            </h4>
+                            <div style={{ fontSize: 14, opacity: 0.8 }}>
+                              {valesFiltrados.length} transacciones en el período
+                            </div>
+                          </div>
+                          <div style={{ 
+                            background: 'rgba(255, 255, 255, 0.15)',
+                            borderRadius: 16,
+                            padding: '12px 16px',
+                            textAlign: 'center',
+                            backdropFilter: 'blur(10px)'
+                          }}>
+                            <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 2 }}>REGISTROS</div>
+                            <div style={{ 
+                              fontSize: 20, 
+                              fontWeight: 800,
+                              color: '#4ade80'
+                            }}>
+                              {valesFiltrados.length}
+                            </div>
+                          </div>
+                        </div>
+
+                        {mensaje && (
+                          <div style={{
+                            background: mensaje.includes('✅') ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                            borderRadius: 12,
+                            padding: 12,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: mensaje.includes('✅') ? '#4ade80' : '#f87171',
+                            border: `1px solid ${mensaje.includes('✅') ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+                          }}>
+                            {mensaje}
+                          </div>
+                        )}
                       </div>
-                      <div className="table-responsive" style={{
+                      
+                      {/* Información de edición mejorada */}
+                      {(rol === 'admin' || rol === 'anfitrion') && (
+                        <div style={{ 
+                          padding: '16px 20px',
+                          background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <div style={{ 
+                            fontSize: 13, 
+                            color: '#475569',
+                            lineHeight: 1.4
+                          }}>
+                            <div className="d-flex align-items-center mb-2">
+                              <i className="bi bi-info-circle me-2" style={{color: '#3b82f6'}}></i>
+                              <strong style={{ color: '#1e293b' }}>Panel de Edición:</strong>
+                              <span className="ms-2">
+                                Haz clic en <i className="bi bi-pencil mx-1" style={{color: '#3b82f6'}}></i> para editar un vale.
+                              </span>
+                            </div>
+                            <div className="d-flex align-items-center flex-wrap gap-3">
+                              <span>
+                                <strong>Rol actual:</strong> 
+                                <span style={{
+                                  color: '#dc3545', 
+                                  fontWeight: 600,
+                                  background: 'rgba(220, 53, 69, 0.1)',
+                                  padding: '2px 6px',
+                                  borderRadius: 6,
+                                  marginLeft: 4
+                                }}>
+                                  {rol || 'Sin rol'}
+                                </span>
+                              </span>
+                              <span>
+                                <strong>Estados:</strong> 
+                                <span style={{color: '#22c55e', marginLeft: 6}}>■ Aprobado</span>
+                                <span style={{color: '#dc3545', marginLeft: 6}}>■ Rechazado</span>
+                                <span style={{color: '#f59e42', marginLeft: 6}}>■ Pendiente</span>
+                                <span style={{color: '#6366f1', marginLeft: 6}}>■ Editando</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tabla con diseño moderno */}
+                      <div style={{
                         overflowX: 'auto', 
                         width: '100%', 
                         background: "#fff", 
-                        padding: 16, 
-                        marginLeft: 0, 
-                        marginRight: 0,
-                        borderRadius: '0 0 20px 20px'
+                        borderRadius: '0 0 20px 20px',
+                        padding: '12px'
                       }}>
                     <Table
                       striped
@@ -992,28 +1357,66 @@ function CuadreDiario() {
                       size="sm"
                       className="mb-0"
                       style={{
-                        fontSize: 14,
-                        minWidth: 1100,
-                        background: "#fff"
+                        fontSize: '13px',
+                        minWidth: '320px', // Reducido para móvil
+                        background: "#fff",
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                       }}
                     >
-                      <thead>
+                      <thead style={{
+                        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                        color: 'white'
+                      }}>
     <tr>
-      <th style={{padding: '4px 6px'}}>Código</th>
-      <th style={{padding: '4px 6px'}}>Profesional</th>
-      <th style={{padding: '4px 6px'}}>Fecha</th>
-      <th style={{padding: '4px 6px'}}>Hora</th>
-      <th style={{padding: '4px 6px'}}>Tipo</th>
-      <th style={{padding: '4px 6px'}}>Servicio/Concepto</th>
-      <th style={{padding: '4px 6px'}}>Forma de Pago</th>
-      <th style={{padding: '4px 6px'}}>Local</th>
-      <th style={{padding: '4px 6px'}}>Monto</th>
-      <th style={{padding: '4px 6px'}}>Monto Percibido</th>
-      <th style={{padding: '4px 6px'}}>Estado</th>
-      <th style={{padding: '4px 6px'}}>Aprobado por</th>
-      <th style={{padding: '4px 6px'}}>Observación</th>
-      <th style={{padding: '4px 6px'}}>Comisión</th>
-      {(rol === 'admin' || rol === 'anfitrion') && <th style={{padding: '4px 6px'}}>Acciones</th>}
+      {/* Código - Oculto en móvil */}
+      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Código</th>
+      
+      {/* Profesional - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Profesional</th>
+      
+      {/* Fecha - Oculto en móvil */}
+      <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Fecha</th>
+      
+      {/* Hora - Oculto en móvil */}
+      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Hora</th>
+      
+      {/* Tipo - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Tipo</th>
+      
+      {/* Servicio/Concepto - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Servicio</th>
+      
+      {/* Forma de Pago - Oculto en móvil */}
+      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Pago</th>
+      
+      {/* Local - Oculto en móvil */}
+      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Local</th>
+      
+      {/* Monto - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Monto</th>
+      
+      {/* % Prof. - Oculto en móvil */}
+      <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>%</th>
+      
+      {/* Monto Percibido - Oculto en móvil */}
+      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Percibido</th>
+      
+      {/* Estado - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Estado</th>
+      
+      {/* Aprobado por - Oculto en móvil */}
+      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Aprobado</th>
+      
+      {/* Observación - Oculto en móvil */}
+      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Observación</th>
+      
+      {/* Comisión Extra - Oculto en móvil */}
+      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Comisión</th>
+      
+      {/* Acciones - Siempre visible */}
+      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Acciones</th>
     </tr>
   </thead>
                       <tbody>
@@ -1054,66 +1457,194 @@ function CuadreDiario() {
                               key={vale.id}
                               style={{
                                 borderLeft: `6px solid ${
-                                  vale.estado === 'aprobado'
-                                  ? '#22c55e'
-                                  : vale.estado === 'rechazado'
-                                  ? '#dc3545'
-                                  : '#f59e42'
+                                  editandoVale === vale.id 
+                                    ? '#6366f1' // Azul para modo edición
+                                    : vale.estado === 'aprobado'
+                                    ? '#22c55e'
+                                    : vale.estado === 'rechazado'
+                                    ? '#dc3545'
+                                    : '#f59e42'
                                 }`,
-                                background: vale.estado === 'rechazado'
-                                ? '#fef2f2'
-                                : vale.estado === 'aprobado'
-                                ? '#f0fdf4'
-                                : '#fffbeb',
+                                background: editandoVale === vale.id 
+                                  ? '#f1f5f9' // Fondo azul claro para modo edición
+                                  : vale.estado === 'rechazado'
+                                  ? '#fef2f2'
+                                  : vale.estado === 'aprobado'
+                                  ? '#f0fdf4'
+                                  : '#fffbeb',
                                 fontWeight: 500,
                                 fontSize: 15,
+                                boxShadow: editandoVale === vale.id ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none',
+                                transition: 'all 0.2s ease'
                               }}
                             >
-                              <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
+                              <td className="d-none d-md-table-cell" style={{padding: '6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '11px'}}>
                                 {vale.codigo || '-'}
                               </td>
-                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#2563eb'}}>
-                                {vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido'}
+                              <td style={{padding: '6px', fontWeight: 600, color: '#2563eb', fontSize: '11px', maxWidth: '120px'}}>
+                                <div style={{ 
+                                  whiteSpace: 'nowrap', 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis' 
+                                }}>
+                                  {vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido'}
+                                </div>
+                                {/* En móvil, mostrar información adicional */}
+                                <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                  {vale.fecha.toLocaleDateString()} - {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div className="d-lg-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                  {vale.formaPago && `${vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)}`}
+                                  {vale.local && ` • ${vale.local}`}
+                                </div>
                               </td>
-                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
-                              <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td style={{padding: '4px 6px'}}>
-                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
-                                  {vale.tipo}
+                              <td className="d-none d-sm-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleDateString()}</td>
+                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td style={{padding: '6px'}}>
+                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '9px'}}>
+                                  {vale.tipo === 'Ingreso' ? 'ING' : 'EGR'}
                                 </span>
                               </td>
-                              <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
-                              <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-                              <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
-                              <td style={{
-                                padding: '4px 6px',
-                                color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
-                                fontWeight: 700
-                              }}>
-                                {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+                              <td style={{padding: '6px', fontWeight: 600, color: '#374151', fontSize: '11px', maxWidth: '150px'}}>
+                                <div style={{ 
+                                  whiteSpace: 'nowrap', 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis' 
+                                }}>
+                                  <CeldaEditableExterna
+                                    esEditable={editandoVale === vale.id}
+                                    valorActual={valoresEditados.servicio !== undefined ? valoresEditados.servicio : (vale.servicio || vale.concepto || '')}
+                                    onCambio={valor => handleCambioValor('servicio', valor)}
+                                  />
+                                </div>
+                                {/* En móvil, mostrar % y comisión extra */}
+                                <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                  {vale.tipo === 'Ingreso' && (
+                                    <>
+                                      {(() => {
+                                        if (vale.dividirPorDos) {
+                                          if (typeof vale.dividirPorDos === 'string') {
+                                            return `${vale.dividirPorDos}%`;
+                                          } else {
+                                            return '50%';
+                                          }
+                                        } else {
+                                          return '100%';
+                                        }
+                                      })()}
+                                      {vale.comisionExtra > 0 && (
+                                        <span style={{ color: '#6366f1', fontWeight: 600 }}>
+                                          {' + $'}{Number(vale.comisionExtra).toLocaleString()}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </td>
-                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                                <CeldaEditableExterna
+                                  esEditable={editandoVale === vale.id}
+                                  valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : (vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '')}
+                                  onCambio={valor => handleCambioValor('formaPago', valor)}
+                                  opciones={[
+                                    {value: 'efectivo', label: 'Efectivo'},
+                                    {value: 'debito', label: 'Débito'},
+                                    {value: 'transferencia', label: 'Transferencia'}
+                                  ]}
+                                />
+                              </td>
+                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                                <CeldaEditableExterna
+                                  esEditable={editandoVale === vale.id}
+                                  valorActual={valoresEditados.local !== undefined ? valoresEditados.local : (vale.local || '-')}
+                                  onCambio={valor => handleCambioValor('local', valor)}
+                                  opciones={[
+                                    {value: 'La Tirana', label: 'La Tirana'},
+                                    {value: 'Salvador Allende', label: 'Salvador Allende'}
+                                  ]}
+                                />
+                              </td>
+                              <td style={{
+                                padding: '6px',
+                                color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
+                                fontWeight: 700,
+                                fontSize: '12px'
+                              }}>
+                                {editandoVale === vale.id ? (
+                                  <div className="d-flex align-items-center">
+                                    <span style={{marginRight: 4, fontSize: '10px'}}>{vale.tipo === 'Ingreso' ? '+' : '-'}$</span>
+                                    <CeldaEditableExterna
+                                      esEditable={true}
+                                      valorActual={valoresEditados.valor !== undefined ? valoresEditados.valor : (vale.valor || 0)}
+                                      onCambio={valor => handleCambioValor('valor', valor)}
+                                      tipo="number"
+                                    />
+                                  </div>
+                                ) : (
+                                  `${vale.tipo === 'Ingreso' ? '+' : '-'}$${Number(vale.valor || 0).toLocaleString()}`
+                                )}
+                                {/* En móvil, mostrar monto percibido debajo */}
+                                <div className="d-md-none" style={{ fontSize: '10px', color: '#6366f1', marginTop: '2px', fontWeight: 600 }}>
+                                  {vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && (
+                                    <>Percibido: ${getMontoPercibido(vale).toLocaleString()}</>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="d-none d-sm-table-cell" style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
+                                {vale.tipo === 'Ingreso' ? (
+                                  editandoVale === vale.id ? (
+                                    <div className="d-flex align-items-center justify-content-center">
+                                      <CeldaEditableExterna
+                                        esEditable={true}
+                                        valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (vale.dividirPorDos || 50)}
+                                        onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                                        opciones={[
+                                          {value: 100, label: '100%'},
+                                          {value: 50, label: '50%'},
+                                          {value: 45, label: '45%'}
+                                        ]}
+                                      />
+                                    </div>
+                                  ) : (
+                                    (() => {
+                                      if (vale.dividirPorDos) {
+                                        if (typeof vale.dividirPorDos === 'string') {
+                                          return `${vale.dividirPorDos}%`;
+                                        } else {
+                                          return '50%';
+                                        }
+                                      } else {
+                                        return '100%';
+                                      }
+                                    })()
+                                  )
+                                ) : '-'}
+                              </td>
+                              <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
                                 {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
                                   ? `$${getMontoPercibido(vale).toLocaleString()}`
                                   : '-'}
                               </td>
-                              {/* Estado */}
-                              <td>
+                              <td style={{padding: '6px'}}>
                                 <span className={`badge ${
                                   vale.estado === 'aprobado'
                                     ? 'bg-success'
                                     : vale.estado === 'rechazado'
                                     ? 'bg-danger'
                                     : 'bg-warning text-dark'
-                                }`}>
+                                }`} style={{fontSize: '9px'}}>
                                   {vale.estado === 'aprobado'
-                                  ? 'Aprobado'
+                                  ? 'OK'
                                   : vale.estado === 'rechazado'
-                                  ? 'Rechazado'
-                                  : 'Pendiente'}
+                                  ? 'X'
+                                  : 'P'}
                                 </span>
+                                {/* En móvil, mostrar observación debajo del estado */}
+                                <div className="d-lg-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {vale.observacion && vale.observacion !== '-' && vale.observacion}
+                                </div>
                               </td>
-                              <td style={{padding: '4px 6px'}}>
+                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
                                 {vale.estado === 'aprobado' && vale.aprobadoPor ? (
                                   <span style={{ color: '#22c55e', fontWeight: 700 }}>
                                     <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
@@ -1128,21 +1659,83 @@ function CuadreDiario() {
                                   <span className="text-secondary">-</span>
                                 )}
                               </td>
-                              <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
-                              <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-                                {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                                <CeldaEditableExterna
+                                  esEditable={editandoVale === vale.id}
+                                  valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '-')}
+                                  onCambio={valor => handleCambioValor('observacion', valor)}
+                                />
                               </td>
-                              {(rol === 'admin' || rol === 'anfitrion') && (
-                                <td style={{padding: '4px 6px'}}>
-                                  <Button
-                                    variant="danger"
-                                    size="sm"
-                                    onClick={() => handleEliminar(vale)}
-                                  >
-                                    Eliminar
-                                  </Button>
-                                </td>
-                              )}
+                              <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+                                {vale.tipo === 'Ingreso' ? (
+                                  editandoVale === vale.id ? (
+                                    <div className="d-flex align-items-center">
+                                      <span style={{marginRight: 4, fontSize: '10px'}}>+$</span>
+                                      <CeldaEditableExterna
+                                        esEditable={true}
+                                        valorActual={valoresEditados.comisionExtra !== undefined ? valoresEditados.comisionExtra : (vale.comisionExtra || 0)}
+                                        onCambio={valor => handleCambioValor('comisionExtra', valor)}
+                                        tipo="number"
+                                      />
+                                    </div>
+                                  ) : (
+                                    vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'
+                                  )
+                                ) : '-'}
+                              </td>
+                              <td style={{padding: '6px'}}>
+                                  <div className="d-flex gap-1 flex-wrap">
+                                    {editandoVale === vale.id ? (
+                                      <>
+                                        <Button
+                                          variant="success"
+                                          size="sm"
+                                          onClick={() => guardarEdicion(vale)}
+                                          disabled={guardando}
+                                          title="Guardar cambios"
+                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                        >
+                                          {guardando ? (
+                                            <Spinner as="span" animation="border" size="sm" />
+                                          ) : (
+                                            <i className="bi bi-check" style={{fontSize: '12px'}}></i>
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={cancelarEdicion}
+                                          disabled={guardando}
+                                          title="Cancelar"
+                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                        >
+                                          <i className="bi bi-x" style={{fontSize: '12px'}}></i>
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          onClick={() => iniciarEdicion(vale)}
+                                          title="Editar"
+                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                        >
+                                          <i className="bi bi-pencil" style={{fontSize: '12px'}}></i>
+                                        </Button>
+                                        <Button
+                                          variant="danger"
+                                          size="sm"
+                                          onClick={() => handleEliminar(vale)}
+                                          title="Eliminar"
+                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                        >
+                                          <i className="bi bi-trash" style={{fontSize: '12px'}}></i>
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                              </td>
                             </tr>
                           ))}
                       </tbody>
@@ -1346,29 +1939,66 @@ function CuadreDiario() {
                                 size="sm"
                                 className="mb-0"
                                 style={{
-                                  fontSize: 14, 
-                                  minWidth: 900, 
+                                  fontSize: '13px',
+                                  minWidth: '320px', // Reducido para móvil
                                   background: "#fff",
-                                  borderRadius: 16
+                                  borderRadius: 12,
+                                  overflow: 'hidden',
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                                 }}
                               >
-                <thead>
+                                <thead style={{
+                                  background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                                  color: 'white'
+                                }}>
   <tr>
-    <th>Código</th>
-    <th>Profesional</th>
-    <th>Fecha</th>
-    <th>Hora</th>
-    <th>Tipo</th>
-    <th>Servicio/Concepto</th>
-    <th>Forma de Pago</th>
-    <th>Local</th>
-    <th>Monto</th>
-    <th>Monto Percibido</th>
-    <th>Estado</th>
-    <th>Aprobado por</th>
-    <th>Observación</th>
-    <th>Comisión</th>
-    {(rol === 'admin' || rol === 'anfitrion') && <th>Acciones</th>}
+    {/* Código - Oculto en móvil */}
+    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Código</th>
+    
+    {/* Profesional - Oculto en vista profesional ya que está en el header */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Profesional</th>
+    
+    {/* Fecha - Oculto en móvil */}
+    <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Fecha</th>
+    
+    {/* Hora - Oculto en móvil */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Hora</th>
+    
+    {/* Tipo - Siempre visible */}
+    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Tipo</th>
+    
+    {/* Servicio/Concepto - Siempre visible */}
+    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Servicio</th>
+    
+    {/* Forma de Pago - Oculto en móvil */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Pago</th>
+    
+    {/* Local - Oculto en móvil */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Local</th>
+    
+    {/* Monto - Siempre visible */}
+    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Monto</th>
+    
+    {/* % Prof. - Oculto en móvil */}
+    <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>%</th>
+    
+    {/* Monto Percibido - Oculto en móvil */}
+    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Percibido</th>
+    
+    {/* Estado - Siempre visible */}
+    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Estado</th>
+    
+    {/* Aprobado por - Oculto en móvil */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Aprobado</th>
+    
+    {/* Observación - Oculto en móvil */}
+    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Observación</th>
+    
+    {/* Comisión Extra - Oculto en móvil */}
+    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Comisión</th>
+    
+    {/* Acciones - Siempre visible */}
+    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Acciones</th>
   </tr>
 </thead>
                                 <tbody>
@@ -1379,65 +2009,231 @@ function CuadreDiario() {
         key={vale.id}
         style={{
           borderLeft: `6px solid ${
-            vale.estado === 'aprobado'
+            editandoVale === vale.id 
+              ? '#6366f1' // Azul para modo edición
+              : vale.estado === 'aprobado'
               ? '#22c55e'
               : vale.estado === 'rechazado'
               ? '#dc3545'
               : '#f59e42'
           }`,
-          background: vale.estado === 'rechazado'
+          background: editandoVale === vale.id 
+            ? '#f1f5f9' // Fondo azul claro para modo edición
+            : vale.estado === 'rechazado'
             ? '#fef2f2'
             : vale.estado === 'aprobado'
             ? '#f0fdf4'
             : '#fffbeb',
           fontWeight: 500,
           fontSize: 15,
+          boxShadow: editandoVale === vale.id ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none',
+          transition: 'all 0.2s ease'
         }}
       >
-        <td style={{padding: '4px 6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f3f4f6'}}>
-          {vale.codigo || '-'}
+        <td className="d-none d-md-table-cell" style={{padding: '6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.codigo !== undefined ? valoresEditados.codigo : (vale.codigo || '-')}
+            onCambio={valor => handleCambioValor('codigo', valor)}
+            tipo="text"
+          />
         </td>
-        <td style={{padding: '4px 6px', fontWeight: 600, color: '#2563eb'}}>
-          {vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido'}
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontWeight: 600, color: '#2563eb', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.peluquero !== undefined ? valoresEditados.peluquero : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido')}
+            onCambio={valor => handleCambioValor('peluquero', valor)}
+            tipo="text"
+          />
         </td>
-        <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleDateString()}</td>
-        <td style={{padding: '4px 6px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-        <td style={{padding: '4px 6px'}}>
-          <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`}>
-            {vale.tipo}
-          </span>
+        <td className="d-none d-sm-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString()}
+            onCambio={valor => handleCambioValor('fecha', valor)}
+            tipo="date"
+          />
         </td>
-        <td style={{padding: '4px 6px', fontWeight: 600, color: '#374151'}}>{vale.servicio || vale.concepto || '-'}</td>
-        <td style={{padding: '4px 6px'}}>{vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-'}</td>
-        <td style={{padding: '4px 6px'}}>{vale.local || '-'}</td>
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        <td style={{padding: '6px'}}>
+          {editandoVale === vale.id ? (
+            <CeldaEditableExterna
+              esEditable={true}
+              valorActual={valoresEditados.tipo !== undefined ? valoresEditados.tipo : vale.tipo}
+              onCambio={valor => handleCambioValor('tipo', valor)}
+              opciones={[
+                {value: 'Ingreso', label: 'Ingreso'},
+                {value: 'Egreso', label: 'Egreso'}
+              ]}
+            />
+          ) : (
+            <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '9px'}}>
+              {vale.tipo === 'Ingreso' ? 'ING' : 'EGR'}
+            </span>
+          )}
+          {/* En móvil, mostrar información adicional */}
+          <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+            {vale.fecha.toLocaleDateString()} - {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </td>
+        <td style={{padding: '6px', fontWeight: 600, color: '#374151', fontSize: '11px', maxWidth: '150px'}}>
+          <div style={{ 
+            whiteSpace: 'nowrap', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis' 
+          }}>
+            <CeldaEditableExterna
+              esEditable={editandoVale === vale.id}
+              valorActual={valoresEditados.servicio !== undefined ? valoresEditados.servicio : (vale.servicio || vale.concepto || '-')}
+              onCambio={valor => handleCambioValor('servicio', valor)}
+              tipo="text"
+            />
+          </div>
+          {/* En móvil, mostrar información adicional */}
+          <div className="d-lg-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+            {vale.formaPago && `${vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)}`}
+            {vale.local && ` • ${vale.local}`}
+          </div>
+          <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+            {vale.tipo === 'Ingreso' && (
+              <>
+                {(() => {
+                  let porcentaje = 50;
+                  if (vale.dividirPorDos) {
+                    if (typeof vale.dividirPorDos === 'string') {
+                      porcentaje = Number(vale.dividirPorDos);
+                    } else if (vale.dividirPorDos === true) {
+                      porcentaje = 50;
+                    }
+                  }
+                  return `${porcentaje}%`;
+                })()}
+                {vale.comisionExtra > 0 && (
+                  <span style={{ color: '#6366f1', fontWeight: 600 }}>
+                    {' + $'}{Number(vale.comisionExtra).toLocaleString()}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </td>
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : (vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-')}
+            onCambio={valor => handleCambioValor('formaPago', valor)}
+            opciones={[
+              {value: 'efectivo', label: 'Efectivo'},
+              {value: 'debito', label: 'Débito'},
+              {value: 'transferencia', label: 'Transferencia'}
+            ]}
+          />
+        </td>
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.local !== undefined ? valoresEditados.local : (vale.local || '-')}
+            onCambio={valor => handleCambioValor('local', valor)}
+            opciones={[
+              {value: 'La Tirana', label: 'La Tirana'},
+              {value: 'Salvador Allende', label: 'Salvador Allende'}
+            ]}
+          />
+        </td>
         <td style={{
-          padding: '4px 6px',
+          padding: '6px',
           color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
-          fontWeight: 700
+          fontWeight: 700,
+          fontSize: '12px'
         }}>
-          {vale.tipo === 'Ingreso' ? '+' : '-'}${Number(vale.valor || 0).toLocaleString()}
+          {editandoVale === vale.id ? (
+            <div className="d-flex align-items-center">
+              <span style={{marginRight: 4, fontSize: '10px'}}>{vale.tipo === 'Ingreso' ? '+' : '-'}$</span>
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.valor !== undefined ? valoresEditados.valor : (vale.valor || 0)}
+                onCambio={valor => handleCambioValor('valor', valor)}
+                tipo="number"
+              />
+            </div>
+          ) : (
+            `${vale.tipo === 'Ingreso' ? '+' : '-'}$${Number(vale.valor || 0).toLocaleString()}`
+          )}
+          {/* En móvil, mostrar monto percibido */}
+          <div className="d-md-none" style={{ fontSize: '10px', color: '#6366f1', marginTop: '2px', fontWeight: 600 }}>
+            {vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && (
+              <>Percibido: ${getMontoPercibido(vale).toLocaleString()}</>
+            )}
+          </div>
         </td>
-        <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
+        <td className="d-none d-sm-table-cell" style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
+          {vale.tipo === 'Ingreso' ? (
+            editandoVale === vale.id ? (
+              <div className="d-flex align-items-center justify-content-center">
+                <CeldaEditableExterna
+                  esEditable={true}
+                  valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (vale.dividirPorDos || 50)}
+                  onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                  opciones={[
+                    {value: 100, label: '100%'},
+                    {value: 50, label: '50%'},
+                    {value: 45, label: '45%'}
+                  ]}
+                />
+              </div>
+            ) : (
+              (() => {
+                let porcentaje = 50;
+                if (vale.dividirPorDos) {
+                  if (typeof vale.dividirPorDos === 'string') {
+                    porcentaje = Number(vale.dividirPorDos);
+                  } else if (vale.dividirPorDos === true) {
+                    porcentaje = 50;
+                  }
+                }
+                return `${porcentaje}%`;
+              })()
+            )
+          ) : '-'}
+        </td>
+        <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
           {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
             ? `$${getMontoPercibido(vale).toLocaleString()}`
             : '-'}
         </td>
-        <td style={{padding: '4px 6px'}}>
-          <span className={`badge ${
-            vale.estado === 'aprobado'
-              ? 'bg-success'
+        <td style={{padding: '6px'}}>
+          {editandoVale === vale.id ? (
+            <CeldaEditableExterna
+              esEditable={true}
+              valorActual={valoresEditados.estado !== undefined ? valoresEditados.estado : vale.estado}
+              onCambio={valor => handleCambioValor('estado', valor)}
+              opciones={[
+                {value: 'pendiente', label: 'Pendiente'},
+                {value: 'aprobado', label: 'Aprobado'},
+                {value: 'rechazado', label: 'Rechazado'}
+              ]}
+            />
+          ) : (
+            <span className={`badge ${
+              vale.estado === 'aprobado'
+                ? 'bg-success'
+                : vale.estado === 'rechazado'
+                ? 'bg-danger'
+                : 'bg-warning text-dark'
+            }`} style={{fontSize: '9px'}}>
+              {vale.estado === 'aprobado'
+              ? 'OK'
               : vale.estado === 'rechazado'
-              ? 'bg-danger'
-              : 'bg-warning text-dark'
-          }`}>
-            {vale.estado === 'aprobado'
-              ? 'Aprobado'
-              : vale.estado === 'rechazado'
-              ? 'Rechazado'
-              : 'Pendiente'}
-          </span>
+              ? 'X'
+              : 'P'}
+            </span>
+          )}
+          {/* En móvil, mostrar observación */}
+          <div className="d-lg-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {vale.observacion && vale.observacion !== '-' && vale.observacion}
+          </div>
         </td>
-        <td style={{padding: '4px 6px'}}>
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
           {vale.estado === 'aprobado' && vale.aprobadoPor ? (
             <span style={{ color: '#22c55e', fontWeight: 700 }}>
               <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
@@ -1452,21 +2248,84 @@ function CuadreDiario() {
             <span className="text-secondary">-</span>
           )}
         </td>
-        <td style={{padding: '4px 6px'}}>{vale.observacion || '-'}</td>
-        <td style={{padding: '4px 6px', color: '#6366f1', fontWeight: 700}}>
-          {vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'}
+        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+          <CeldaEditableExterna
+            esEditable={editandoVale === vale.id}
+            valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '-')}
+            onCambio={valor => handleCambioValor('observacion', valor)}
+            tipo="text"
+          />
         </td>
-        {(rol === 'admin' || rol === 'anfitrion') && (
-          <td style={{padding: '4px 6px'}}>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => handleEliminar(vale)}
-            >
-              Eliminar
-            </Button>
-          </td>
-        )}
+        <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+          {vale.tipo === 'Ingreso' ? (
+            editandoVale === vale.id ? (
+              <div className="d-flex align-items-center">
+                <span style={{marginRight: 4, fontSize: '10px'}}>+$</span>
+                <CeldaEditableExterna
+                  esEditable={true}
+                  valorActual={valoresEditados.comisionExtra !== undefined ? valoresEditados.comisionExtra : (vale.comisionExtra || 0)}
+                  onCambio={valor => handleCambioValor('comisionExtra', valor)}
+                  tipo="number"
+                />
+              </div>
+            ) : (
+              vale.comisionExtra ? `+$${Number(vale.comisionExtra).toLocaleString()}` : '-'
+            )
+          ) : '-'}
+        </td>
+        <td style={{padding: '6px'}}>
+          <div className="d-flex gap-1 flex-wrap">
+            {editandoVale === vale.id ? (
+              <>
+                <Button
+                  variant="success"
+                  size="sm"
+                  onClick={() => guardarEdicion(vale)}
+                  disabled={guardando}
+                  title="Guardar cambios"
+                  style={{borderRadius: 8, padding: '4px 8px'}}
+                >
+                  {guardando ? (
+                    <Spinner as="span" animation="border" size="sm" />
+                  ) : (
+                    <i className="bi bi-check" style={{fontSize: '12px'}}></i>
+                  )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={cancelarEdicion}
+                  disabled={guardando}
+                  title="Cancelar"
+                  style={{borderRadius: 8, padding: '4px 8px'}}
+                >
+                  <i className="bi bi-x" style={{fontSize: '12px'}}></i>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => iniciarEdicion(vale)}
+                  title="Editar"
+                  style={{borderRadius: 8, padding: '4px 8px'}}
+                >
+                  <i className="bi bi-pencil" style={{fontSize: '12px'}}></i>
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleEliminar(vale)}
+                  title="Eliminar"
+                  style={{borderRadius: 8, padding: '4px 8px'}}
+                >
+                  <i className="bi bi-trash" style={{fontSize: '12px'}}></i>
+                </Button>
+              </>
+            )}
+          </div>
+        </td>
       </tr>
     ))}
                                 </tbody>

@@ -486,9 +486,9 @@ function ValesServicio() {
                         <div style={{ color: '#166534', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
                             ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
-                                ? 'Mis ingresos hoy'
-                                : 'Mis ingresos del día')
-                            : 'Mis ingresos totales'
+                                ? 'Ingresos de Hoy'
+                                : 'Ingresos del Día')
+                            : 'Ingresos Totales'
                           }
                         </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#14532d' }}>
@@ -507,9 +507,9 @@ function ValesServicio() {
                         <div style={{ color: '#92400e', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
                             ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
-                                ? 'Mis gastos hoy'
-                                : 'Mis gastos del día')
-                            : 'Mis gastos totales'
+                                ? 'Gastos de Hoy'
+                                : 'Gastos del Día')
+                            : 'Gastos Totales'
                           }
                         </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#78350f' }}>
@@ -526,7 +526,7 @@ function ValesServicio() {
                           border: `1px solid ${acumuladoNeto >= 0 ? '#86efac' : '#fca5a5'}`
                         }}>
                           <div style={{ color: acumuladoNeto >= 0 ? '#166534' : '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
-                            Mi neto
+                            Balance Final
                           </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: acumuladoNeto >= 0 ? '#14532d' : '#7f1d1d' }}>
                             ${acumuladoNeto.toLocaleString()}
@@ -599,7 +599,9 @@ function ValesServicio() {
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Valor</th>
                             <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>%</th>
                             <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Comisión</th>
-                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Total</th>
+                            <th style={{padding: '8px 6px', fontWeight: 600, color: '#22c55e', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>
+                              <i className="bi bi-wallet me-1"></i>Mi Ganancia
+                            </th>
                             <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Fecha</th>
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Hora</th>
                             <th style={{padding: '8px 6px', fontWeight: 600, color: '#374151', borderBottom: '2px solid #e2e8f0', fontSize: '0.75rem'}}>Estado</th>
@@ -688,22 +690,39 @@ function ValesServicio() {
                                   )}
                                 </td>
                                 
-                                {/* Total - Siempre visible */}
-                                <td style={{padding: '8px 6px'}}>
-                                  <strong style={{ 
-                                    color: vale.estado === 'aprobado' ? '#22c55e' : '#64748b',
-                                    fontSize: '0.8rem'
+                                {/* Mi Ganancia - Siempre visible y destacada */}
+                                <td style={{padding: '8px 6px', background: vale.estado === 'aprobado' ? '#f0fdf4' : '#f8fafc'}}>
+                                  <div style={{ 
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexDirection: 'column'
                                   }}>
-                                    ${getGanancia(vale)?.toLocaleString() || '0'}
-                                  </strong>
+                                    <strong style={{ 
+                                      color: vale.estado === 'aprobado' ? '#22c55e' : '#64748b',
+                                      fontSize: '0.9rem',
+                                      fontWeight: 700
+                                    }}>
+                                      ${getGanancia(vale)?.toLocaleString() || '0'}
+                                    </strong>
+                                    {vale.estado === 'aprobado' && (
+                                      <small style={{ color: '#16a34a', fontSize: '0.65rem', fontWeight: 500 }}>
+                                        ✓ Confirmado
+                                      </small>
+                                    )}
+                                  </div>
                                   {/* En móvil, mostrar % y comisión como texto pequeño */}
-                                  <div className="d-sm-none" style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px' }}>
+                                  <div className="d-sm-none" style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '2px', textAlign: 'center' }}>
                                     {vale.dividirPorDos ? (
                                       typeof vale.dividirPorDos === 'string' 
                                         ? `${vale.dividirPorDos}%`
                                         : '50%'
                                     ) : '100%'}
-                                    {vale.comisionExtra > 0 && ` +$${vale.comisionExtra?.toLocaleString()}`}
+                                    {vale.comisionExtra > 0 && (
+                                      <span style={{ color: '#059669', fontWeight: 600 }}>
+                                        {' + $'}{vale.comisionExtra?.toLocaleString()}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 
@@ -783,6 +802,32 @@ function ValesServicio() {
                   </div>
                 </>
               )}
+
+              {/* Panel explicativo sobre ganancias */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                padding: '20px 24px',
+                borderTop: '1px solid #e2e8f0',
+                borderRadius: '0 0 24px 24px'
+              }}>
+                <div className="d-flex align-items-start">
+                  <i className="bi bi-info-circle me-3 mt-1" style={{ fontSize: 18, color: '#0891b2' }}></i>
+                  <div style={{ fontSize: '0.9rem', lineHeight: 1.5, color: '#0f172a' }}>
+                    <h6 style={{ color: '#0891b2', fontWeight: 600, marginBottom: 8 }}>
+                      📊 ¿Cómo se calculan mis ganancias?
+                    </h6>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>Mi Ganancia =</strong> (Valor del Servicio × Mi Porcentaje) + Comisión Extra
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+                      • <strong>Valor del Servicio:</strong> El precio total cobrado al cliente<br/>
+                      • <strong>Mi Porcentaje:</strong> Va del 30% al 100% según lo acordado (se muestra en la columna %)<br/>
+                      • <strong>Comisión Extra:</strong> Bonificaciones adicionales que no se dividen<br/>
+                      • <strong>Estado:</strong> Solo los vales APROBADOS ✓ cuentan para tus ganancias reales
+                    </div>
+                  </div>
+                </div>
+              </div>
             </Card.Body>
           </Card>
         </Col>

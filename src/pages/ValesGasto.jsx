@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase';
 import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, getDocs, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +28,7 @@ function ValesGasto() {
 
   useEffect(() => {
     if (!user?.uid || !rol) return;
+    
     setLoading(true);
     
     const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
@@ -62,10 +63,16 @@ function ValesGasto() {
       setValesUsuario(vales);
       setLoading(false);
     });
-    return () => unsub();
-  }, [user?.uid, rol, mensaje]);
+    
+    // Cleanup function para prevenir múltiples listeners
+    return () => {
+      if (unsub) {
+        unsub();
+      }
+    };
+  }, [user?.uid, rol]); // Removido 'mensaje' de las dependencias
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
@@ -134,7 +141,7 @@ function ValesGasto() {
       setTimeout(() => setMensaje(''), 2000);
       setLoading(false);
     }
-  };
+  }, [loading, concepto, valor, nombreActual, user]);
 
   // Filtrar vales por fecha (si se especifica una fecha)
   const valesFiltrados = fechaFiltro 
