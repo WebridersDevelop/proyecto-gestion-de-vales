@@ -691,12 +691,17 @@ function CuadreDiario() {
                               );
                               const displayName = valeConNombre?.peluquero || nombresUsuarios[u] || u;
                               
+                              // Solo mostrar usuarios que tengan nombre real (no códigos Firebase)
+                              if (displayName === u && (u.includes('@') || u.length > 20)) {
+                                return null; // No mostrar códigos Firebase
+                              }
+                              
                               return (
                                 <option key={u} value={u}>
-                                  {displayName !== u ? `${displayName} (${u})` : u}
+                                  {displayName}
                                 </option>
                               );
-                            })}
+                            }).filter(Boolean)}
                           </Form.Select>
                         </Form.Group>
                       </Col>
