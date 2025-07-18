@@ -657,12 +657,4 @@ function getFechaLocal(fecha) {
   return `${year}-${month}-${day}`;
 }
 
-function getFechaLocal(fecha) {
-  // Convertir un objeto Date a formato YYYY-MM-DD en hora local
-  const year = fecha.getFullYear();
-  const month = String(fecha.getMonth() + 1).padStart(2, '0');
-  const day = String(fecha.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 export default ValesGasto;
