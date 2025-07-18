@@ -147,6 +147,14 @@ function ValesServicio() {
 
       // Crear el vale directamente
       const valeRef = doc(collection(db, 'vales_servicio'));
+      
+      // Calcular la fecha correcta para Chile (UTC-3/UTC-4)
+      const ahora = new Date();
+      // Convertir UTC a hora local de Chile (UTC-3 significa sumar 3 horas al UTC)
+      const utc = new Date(ahora.getTime() + ahora.getTimezoneOffset() * 60000);
+      const chileTime = new Date(utc.getTime() + (-3 * 60 * 60 * 1000)); // UTC-3 (horario de verano Chile)
+      const fechaVale = Timestamp.fromDate(chileTime);
+      
       await setDoc(valeRef, {
         codigo: codigoServicio,
         servicio: servicio.trim(),
@@ -154,7 +162,7 @@ function ValesServicio() {
         peluquero: nombreUsuario,
         peluqueroUid: user.uid,
         peluqueroEmail: user.email, // Agregar el email para compatibilidad con el dashboard
-        fecha: Timestamp.now(),
+        fecha: fechaVale,
         estado: 'pendiente'
       });
 
@@ -840,9 +848,9 @@ function getHoyLocal() {
   // Usar UTC para evitar problemas de zona horaria
   const hoy = new Date();
   const utc = new Date(hoy.getTime() + hoy.getTimezoneOffset() * 60000);
-  const offset = -5; // GMT-5 para Colombia
-  const colombiaTime = new Date(utc.getTime() + (offset * 3600000));
-  const fechaLocal = colombiaTime.toISOString().slice(0, 10);
+  const offset = -3; // UTC-3 para Chile (horario de verano)
+  const chileTime = new Date(utc.getTime() + (offset * 3600000));
+  const fechaLocal = chileTime.toISOString().slice(0, 10);
   return fechaLocal;
 }
 

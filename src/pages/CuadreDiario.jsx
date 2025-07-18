@@ -72,9 +72,12 @@ function CuadreDiario() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   function getHoyLocal() {
+    // Usar UTC para evitar problemas de zona horaria - Chile UTC-3
     const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 10);
+    const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+    // Chile UTC-3: restar 3 horas del UTC para obtener la hora local
+    const chileTime = new Date(utc.getTime() + (-3 * 60 * 60 * 1000));
+    return chileTime.toISOString().slice(0, 10);
   }
   const hoy = getHoyLocal();
   const [desde, setDesde] = useState(hoy);
