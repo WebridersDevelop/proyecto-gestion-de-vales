@@ -12,7 +12,14 @@ function ValesGasto() {
   const [nombreActual, setNombreActual] = useState('');
   const [valesUsuario, setValesUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [fechaFiltro, setFechaFiltro] = useState(''); // Inicia vacío para mostrar todos
+  const [fechaFiltro, setFechaFiltro] = useState(() => {
+    // Por defecto mostrar solo el día actual en hora local
+    const hoy = new Date();
+    const year = hoy.getFullYear();
+    const month = String(hoy.getMonth() + 1).padStart(2, '0');
+    const day = String(hoy.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const conceptoRef = useRef(null);
   const valorRef = useRef(null);
 
@@ -212,7 +219,12 @@ function ValesGasto() {
                       backdropFilter: 'blur(10px)'
                     }}>
                       <small className="d-block opacity-90">
-                        {fechaFiltro ? `Registros del ${fechaFiltro}` : 'Total registros'}
+                        {fechaFiltro 
+                          ? (fechaFiltro === getHoyLocal() 
+                              ? 'Tus registros de hoy' 
+                              : `Tus registros del ${fechaFiltro}`)
+                          : 'Tus registros totales'
+                        }
                       </small>
                       <strong style={{ fontSize: '1.2rem' }}>{valesFiltrados.length}</strong>
                     </div>
@@ -375,18 +387,32 @@ function ValesGasto() {
                           backgroundColor: 'white'
                         }}
                       />
-                      {fechaFiltro && (
+                      <div className="mt-2 d-flex gap-2">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => {
+                            const hoy = new Date();
+                            const year = hoy.getFullYear();
+                            const month = String(hoy.getMonth() + 1).padStart(2, '0');
+                            const day = String(hoy.getDate()).padStart(2, '0');
+                            setFechaFiltro(`${year}-${month}-${day}`);
+                          }}
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          <i className="bi bi-calendar-day me-1"></i>
+                          Hoy
+                        </Button>
                         <Button
                           variant="outline-secondary"
                           size="sm"
-                          className="mt-2"
                           onClick={() => setFechaFiltro('')}
                           style={{ fontSize: '0.8rem' }}
                         >
-                          <i className="bi bi-x-circle me-1"></i>
-                          Mostrar todos
+                          <i className="bi bi-calendar3 me-1"></i>
+                          Todos
                         </Button>
-                      )}
+                      </div>
                     </Form.Group>
                   </Col>
                   <Col md={8}>
@@ -416,7 +442,12 @@ function ValesGasto() {
                           border: '1px solid #f87171'
                         }}>
                           <div style={{ color: '#991b1b', fontSize: '0.8rem', fontWeight: 500 }}>
-                            {fechaFiltro ? 'Tus gastos del día' : 'Tus gastos totales'}
+                            {fechaFiltro 
+                              ? (fechaFiltro === getHoyLocal() 
+                                  ? 'Gastos de Hoy'
+                                  : 'Gastos del Día')
+                              : 'Gastos Totales'
+                            }
                           </div>
                           <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#7f1d1d' }}>
                             ${acumuladoDia.toLocaleString()}
@@ -463,7 +494,12 @@ function ValesGasto() {
                         fontSize: '1rem'
                       }}>
                         <i className="bi bi-list-ul me-2 text-danger"></i>
-                        {fechaFiltro ? `Tus vales del ${fechaFiltro}` : 'Todos tus vales'}
+                        {fechaFiltro 
+                          ? (fechaFiltro === getHoyLocal() 
+                              ? 'Mis gastos de hoy' 
+                              : `Mis gastos del ${fechaFiltro}`)
+                          : 'Todos mis gastos'
+                        }
                       </h6>
                       <span style={{ 
                         background: '#ef4444', 
@@ -509,8 +545,10 @@ function ValesGasto() {
                               <td colSpan={7} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
                                 <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
                                 {fechaFiltro 
-                                  ? `No tienes vales para la fecha ${fechaFiltro}.`
-                                  : 'No tienes vales registrados.'
+                                  ? (fechaFiltro === getHoyLocal() 
+                                      ? 'No hay gastos registrados hoy.'
+                                      : `No hay gastos para la fecha ${fechaFiltro}.`)
+                                  : 'No hay gastos registrados.'
                                 }
                               </td>
                             </tr>
