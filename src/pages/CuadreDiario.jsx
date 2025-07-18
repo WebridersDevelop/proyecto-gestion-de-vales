@@ -72,12 +72,20 @@ function CuadreDiario() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   function getHoyLocal() {
-    // Usar UTC para evitar problemas de zona horaria - Chile UTC-3
-    const d = new Date();
-    const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
-    // Chile UTC-3: restar 3 horas del UTC para obtener la hora local
-    const chileTime = new Date(utc.getTime() + (-3 * 60 * 60 * 1000));
-    return chileTime.toISOString().slice(0, 10);
+    // Usar la fecha local del sistema directamente
+    const hoy = new Date();
+    const year = hoy.getFullYear();
+    const month = String(hoy.getMonth() + 1).padStart(2, '0');
+    const day = String(hoy.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function getFechaLocal(fecha) {
+    // Convertir un objeto Date a formato YYYY-MM-DD en hora local
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
   const hoy = getHoyLocal();
   const [desde, setDesde] = useState(hoy);
@@ -877,13 +885,8 @@ function CuadreDiario() {
                               const finSemana = new Date(inicioSemana);
                               finSemana.setDate(inicioSemana.getDate() + 6); // Sábado
                               
-                              const formatFecha = (fecha) => {
-                                fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-                                return fecha.toISOString().slice(0, 10);
-                              };
-                              
-                              setDesde(formatFecha(inicioSemana));
-                              setHasta(formatFecha(finSemana));
+                              setDesde(getFechaLocal(inicioSemana));
+                              setHasta(getFechaLocal(finSemana));
                             }}
                             style={{ borderRadius: 12, fontSize: 12 }}
                           >
@@ -897,13 +900,8 @@ function CuadreDiario() {
                               const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
                               const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
                               
-                              const formatFecha = (fecha) => {
-                                fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-                                return fecha.toISOString().slice(0, 10);
-                              };
-                              
-                              setDesde(formatFecha(inicioMes));
-                              setHasta(formatFecha(finMes));
+                              setDesde(getFechaLocal(inicioMes));
+                              setHasta(getFechaLocal(finMes));
                             }}
                             style={{ borderRadius: 12, fontSize: 12 }}
                           >
@@ -917,13 +915,8 @@ function CuadreDiario() {
                               const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
                               const finMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
                               
-                              const formatFecha = (fecha) => {
-                                fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-                                return fecha.toISOString().slice(0, 10);
-                              };
-                              
-                              setDesde(formatFecha(inicioMesAnterior));
-                              setHasta(formatFecha(finMesAnterior));
+                              setDesde(getFechaLocal(inicioMesAnterior));
+                              setHasta(getFechaLocal(finMesAnterior));
                             }}
                             style={{ borderRadius: 12, fontSize: 12 }}
                           >

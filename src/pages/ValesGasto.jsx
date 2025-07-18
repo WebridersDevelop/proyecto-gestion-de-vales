@@ -114,10 +114,9 @@ function ValesGasto() {
 
       // Calcular la fecha correcta para Chile (UTC-3/UTC-4)
       const ahora = new Date();
-      // Convertir UTC a hora local de Chile (UTC-3 significa sumar 3 horas al UTC)
-      const utc = new Date(ahora.getTime() + ahora.getTimezoneOffset() * 60000);
-      const chileTime = new Date(utc.getTime() + (-3 * 60 * 60 * 1000)); // UTC-3 (horario de verano Chile)
-      const fechaVale = Timestamp.fromDate(chileTime);
+      // Chile está en UTC-3, por lo que su hora local es 3 horas ADELANTE del UTC
+      // Usamos directamente la hora local del sistema asumiendo que está configurado para Chile
+      const fechaVale = Timestamp.fromDate(ahora);
       
       await setDoc(docRef, {
         concepto: concepto.trim(),
@@ -153,7 +152,7 @@ function ValesGasto() {
   // Filtrar vales por fecha (si se especifica una fecha)
   const valesFiltrados = fechaFiltro 
     ? valesUsuario.filter(vale => {
-        const fechaVale = vale.fecha.toISOString().slice(0, 10);
+        const fechaVale = getFechaLocal(vale.fecha);
         return fechaVale === fechaFiltro;
       })
     : valesUsuario; // Si no hay filtro de fecha, mostrar todos
@@ -642,12 +641,28 @@ function ValesGasto() {
 }
 
 function getHoyLocal() {
-  // Usar UTC para evitar problemas de zona horaria - Chile UTC-3
-  const d = new Date();
-  const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
-  const offset = -3; // UTC-3 para Chile (horario de verano)
-  const chileTime = new Date(utc.getTime() + (offset * 3600000));
-  return chileTime.toISOString().slice(0, 10);
+  // Usar la fecha local del sistema directamente
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = String(hoy.getMonth() + 1).padStart(2, '0');
+  const day = String(hoy.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getFechaLocal(fecha) {
+  // Convertir un objeto Date a formato YYYY-MM-DD en hora local
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getFechaLocal(fecha) {
+  // Convertir un objeto Date a formato YYYY-MM-DD en hora local
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default ValesGasto;

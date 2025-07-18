@@ -62,8 +62,8 @@ function Dashboard() {
         console.log('🔍 Filtros aplicados:', {
           tipoFiltro,
           filtroFecha,
-          fechaInicio: fechaLimiteInicio.toISOString().slice(0, 10),
-          fechaFin: fechaLimiteFin.toISOString().slice(0, 10),
+          fechaInicio: getFechaLocal(fechaLimiteInicio),
+          fechaFin: getFechaLocal(fechaLimiteFin),
           dias: Math.ceil((fechaLimiteFin - fechaLimiteInicio) / (1000 * 60 * 60 * 24))
         });
 
@@ -87,7 +87,7 @@ function Dashboard() {
         for (let i = maxDias - 1; i >= 0; i--) {
           const fecha = new Date(fechaLimiteFin);
           fecha.setDate(fecha.getDate() - i);
-          const fechaStr = fecha.toISOString().slice(0, 10);
+          const fechaStr = getFechaLocal(fecha);
           statsPorDia[fechaStr] = { 
             ingresos: 0
           };
@@ -97,7 +97,7 @@ function Dashboard() {
         valesServicioSnap.forEach(doc => {
           const data = doc.data();
           const fechaVale = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
-          const fechaStr = fechaVale.toISOString().slice(0, 10);
+          const fechaStr = getFechaLocal(fechaVale);
           
           // Solo contar vales dentro del rango de fecha seleccionado
           if (fechaVale >= fechaLimiteInicio && fechaVale <= fechaLimiteFin) {
@@ -176,10 +176,10 @@ function Dashboard() {
         const totalVales = totalValesAprobados + totalValesPendientes + totalValesRechazados;
 
         // Estadísticas del día actual y comparativas
-        const hoy = new Date().toISOString().slice(0, 10);
+        const hoy = getHoyLocal();
         const ayer = new Date();
         ayer.setDate(ayer.getDate() - 1);
-        const ayerStr = ayer.toISOString().slice(0, 10);
+        const ayerStr = getFechaLocal(ayer);
         
         let estadisticasHoy = {
           ingresos: 0,
@@ -208,7 +208,7 @@ function Dashboard() {
         valesServicioSnap.forEach(doc => {
           const data = doc.data();
           const fechaVale = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
-          const fechaStr = fechaVale.toISOString().slice(0, 10);
+          const fechaStr = getFechaLocal(fechaVale);
           
           // Estadísticas del día actual
           if (fechaStr === hoy) {
@@ -282,7 +282,7 @@ function Dashboard() {
         valesGastoSnap.forEach(doc => {
           const data = doc.data();
           const fechaVale = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
-          const fechaStr = fechaVale.toISOString().slice(0, 10);
+          const fechaStr = getFechaLocal(fechaVale);
           
           // Estadísticas del día actual
           if (fechaStr === hoy) {
@@ -367,8 +367,8 @@ function Dashboard() {
           valesRechazados: totalValesRechazados,
           topUsuarios: topUsuarios.length,
           rangoFechas: {
-            inicio: fechaLimiteInicio.toISOString().slice(0, 10),
-            fin: fechaLimiteFin.toISOString().slice(0, 10),
+            inicio: getFechaLocal(fechaLimiteInicio),
+            fin: getFechaLocal(fechaLimiteFin),
             dias: Math.ceil((fechaLimiteFin - fechaLimiteInicio) / (1000 * 60 * 60 * 24))
           }
         });
@@ -400,8 +400,8 @@ function Dashboard() {
             total: valesGastoAprobados + valesGastoPendientes + valesGastoRechazados
           },
           rangoFechas: {
-            inicio: fechaLimiteInicio.toISOString().slice(0, 10),
-            fin: fechaLimiteFin.toISOString().slice(0, 10),
+            inicio: getFechaLocal(fechaLimiteInicio),
+            fin: getFechaLocal(fechaLimiteFin),
             dias: Math.ceil((fechaLimiteFin - fechaLimiteInicio) / (1000 * 60 * 60 * 24))
           },
           // Estadísticas del día actual
@@ -715,8 +715,8 @@ function Dashboard() {
       const haceUnaSemana = new Date();
       haceUnaSemana.setDate(hoy.getDate() - 7);
       
-      setFechaFin(hoy.toISOString().slice(0, 10));
-      setFechaInicio(haceUnaSemana.toISOString().slice(0, 10));
+      setFechaFin(getFechaLocal(hoy));
+      setFechaInicio(getFechaLocal(haceUnaSemana));
     }
   };
 
@@ -823,7 +823,7 @@ function Dashboard() {
                       fontSize: 14,
                       fontWeight: 600
                     }}
-                    max={fechaFin || new Date().toISOString().slice(0, 10)}
+                    max={fechaFin || getHoyLocal()}
                   />
                   <small className="text-muted">Desde</small>
                 </div>
@@ -839,7 +839,7 @@ function Dashboard() {
                       fontWeight: 600
                     }}
                     min={fechaInicio}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={getHoyLocal()}
                   />
                   <small className="text-muted">Hasta</small>
                 </div>
@@ -1881,6 +1881,23 @@ function Dashboard() {
       )}
     </div>
   );
+}
+
+function getFechaLocal(fecha) {
+  // Convertir un objeto Date a formato YYYY-MM-DD en hora local
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getHoyLocal() {
+  // Usar la fecha local del sistema directamente
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = String(hoy.getMonth() + 1).padStart(2, '0');
+  const day = String(hoy.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default Dashboard;

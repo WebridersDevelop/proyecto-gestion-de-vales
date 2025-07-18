@@ -14,9 +14,12 @@ function ValesServicio() {
   const [valesGastoUsuario, setValesGastoUsuario] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState(() => {
-    // Por defecto mostrar solo el día actual
+    // Por defecto mostrar solo el día actual en hora local
     const hoy = new Date();
-    return hoy.toISOString().slice(0, 10);
+    const year = hoy.getFullYear();
+    const month = String(hoy.getMonth() + 1).padStart(2, '0');
+    const day = String(hoy.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   });
   const servicioRef = useRef(null);
   const valorRef = useRef(null);
@@ -150,10 +153,9 @@ function ValesServicio() {
       
       // Calcular la fecha correcta para Chile (UTC-3/UTC-4)
       const ahora = new Date();
-      // Convertir UTC a hora local de Chile (UTC-3 significa sumar 3 horas al UTC)
-      const utc = new Date(ahora.getTime() + ahora.getTimezoneOffset() * 60000);
-      const chileTime = new Date(utc.getTime() + (-3 * 60 * 60 * 1000)); // UTC-3 (horario de verano Chile)
-      const fechaVale = Timestamp.fromDate(chileTime);
+      // Chile está en UTC-3, por lo que su hora local es 3 horas ADELANTE del UTC
+      // Usamos directamente la hora local del sistema asumiendo que está configurado para Chile
+      const fechaVale = Timestamp.fromDate(ahora);
       
       await setDoc(valeRef, {
         codigo: codigoServicio,
@@ -181,7 +183,7 @@ function ValesServicio() {
   // Filtrar vales por fecha
   const valesFiltrados = fechaFiltro 
     ? valesUsuario.filter(vale => {
-        const fechaVale = vale.fecha.toISOString().slice(0, 10);
+        const fechaVale = getFechaLocal(vale.fecha);
         return fechaVale === fechaFiltro;
       })
     : valesUsuario; // Si no hay filtro de fecha (caso especial), mostrar todos
@@ -190,7 +192,7 @@ function ValesServicio() {
   const totalGastosDia = fechaFiltro 
     ? valesGastoUsuario
         .filter(v => {
-          const fechaVale = v.fecha.toISOString().slice(0, 10);
+          const fechaVale = getFechaLocal(v.fecha);
           return fechaVale === fechaFiltro && v.estado === 'aprobado';
         })
         .reduce((acc, v) => acc + (v.valor || 0), 0)
@@ -446,7 +448,10 @@ function ValesServicio() {
                           size="sm"
                           onClick={() => {
                             const hoy = new Date();
-                            setFechaFiltro(hoy.toISOString().slice(0, 10));
+                            const year = hoy.getFullYear();
+                            const month = String(hoy.getMonth() + 1).padStart(2, '0');
+                            const day = String(hoy.getDate()).padStart(2, '0');
+                            setFechaFiltro(`${year}-${month}-${day}`);
                           }}
                           style={{ fontSize: '0.8rem' }}
                         >
@@ -493,7 +498,7 @@ function ValesServicio() {
                         }}>
                         <div style={{ color: '#166534', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
-                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                            ? (fechaFiltro === getHoyLocal() 
                                 ? 'Ingresos de Hoy'
                                 : 'Ingresos del Día')
                             : 'Ingresos Totales'
@@ -514,7 +519,7 @@ function ValesServicio() {
                         }}>
                         <div style={{ color: '#92400e', fontSize: '0.8rem', fontWeight: 500 }}>
                           {fechaFiltro 
-                            ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                            ? (fechaFiltro === getHoyLocal() 
                                 ? 'Gastos de Hoy'
                                 : 'Gastos del Día')
                             : 'Gastos Totales'
@@ -567,7 +572,7 @@ function ValesServicio() {
                       }}>
                         <i className="bi bi-list-ul me-2 text-primary"></i>
                         {fechaFiltro 
-                          ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                          ? (fechaFiltro === getHoyLocal() 
                               ? 'Mis vales de hoy' 
                               : `Mis vales del ${fechaFiltro}`)
                           : 'Todos mis vales'
@@ -622,7 +627,7 @@ function ValesServicio() {
                               <td colSpan={10} className="text-center text-muted py-4" style={{ fontSize: '0.9rem' }}>
                                 <i className="bi bi-info-circle" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '8px' }}></i>
                                 {fechaFiltro 
-                                  ? (fechaFiltro === new Date().toISOString().slice(0, 10) 
+                                  ? (fechaFiltro === getHoyLocal() 
                                       ? 'No hay vales registrados hoy.'
                                       : `No hay vales para la fecha ${fechaFiltro}.`)
                                   : 'No hay vales registrados.'
@@ -845,13 +850,20 @@ function ValesServicio() {
 }
 
 function getHoyLocal() {
-  // Usar UTC para evitar problemas de zona horaria
+  // Usar la fecha local del sistema directamente
   const hoy = new Date();
-  const utc = new Date(hoy.getTime() + hoy.getTimezoneOffset() * 60000);
-  const offset = -3; // UTC-3 para Chile (horario de verano)
-  const chileTime = new Date(utc.getTime() + (offset * 3600000));
-  const fechaLocal = chileTime.toISOString().slice(0, 10);
-  return fechaLocal;
+  const year = hoy.getFullYear();
+  const month = String(hoy.getMonth() + 1).padStart(2, '0');
+  const day = String(hoy.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getFechaLocal(fecha) {
+  // Convertir un objeto Date a formato YYYY-MM-DD en hora local
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export default ValesServicio;
