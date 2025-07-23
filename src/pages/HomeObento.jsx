@@ -2,14 +2,19 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { Row, Col, Card, Badge } from 'react-bootstrap';
 import { useState, useEffect } from 'react';
+import { getButtonStyles, getDeviceInfo } from '../utils/styleUtils';
+
+const deviceInfo = getDeviceInfo();
 
 const buttonStyles = {
   base: {
-    minWidth: 140,
-    minHeight: 140,
-    fontSize: 16,
+    minWidth: deviceInfo.isAndroid ? 150 : 140,
+    minHeight: deviceInfo.isAndroid ? 150 : 140,
+    fontSize: deviceInfo.isAndroid ? 17 : 16,
     borderRadius: 20,
-    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+    boxShadow: deviceInfo.isAndroid 
+      ? '0 6px 20px rgba(0,0,0,0.12)' 
+      : '0 4px 16px rgba(0,0,0,0.08)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -22,7 +27,18 @@ const buttonStyles = {
     position: 'relative',
     overflow: 'hidden',
     gap: 8,
-    backdropFilter: 'blur(10px)',
+    // Mejorar compatibilidad con Android
+    transform: 'translateZ(0)',
+    willChange: 'transform',
+    touchAction: 'manipulation',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+    WebkitTapHighlightColor: 'transparent',
+    // Backdrop filter con fallback para Android
+    ...(deviceInfo.isAndroid 
+      ? { backgroundColor: 'rgba(255, 255, 255, 0.95)' }
+      : { backdropFilter: 'blur(10px)' }
+    ),
     border: '1px solid rgba(255, 255, 255, 0.2)'
   },
   dashboard: { 

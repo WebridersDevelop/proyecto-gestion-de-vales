@@ -1,14 +1,49 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png+xml" href="/logo-peluqueria.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
     <title>Gestion de Vales</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#2563eb" />
+    <style>
+      /* Fix para problemas de Android */
+      * {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      
+      input, textarea, select, button {
+        -webkit-user-select: auto;
+        -moz-user-select: auto;
+        -ms-user-select: auto;
+        user-select: auto;
+      }
+      
+      /* Fix para viewport en Android */
+      html {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      
+      body {
+        -webkit-overflow-scrolling: touch;
+      }
+    </style>
   </head>
   <body>
     <header style="
@@ -24,7 +59,7 @@
       font-weight:600;
       letter-spacing:0.5px;
     ">
-      v2.1.0 &nbsp;|&nbsp; Programa desarrollado por <b>WebRiders</b>
+      v2.1.3 &nbsp;|&nbsp; Programa desarrollado por <b>WebRiders</b>
     </header>
     <div id="root" style="margin-top:36px;"></div>
     <script type="module" src="/src/main.jsx"></script>

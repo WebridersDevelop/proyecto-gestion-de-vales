@@ -1518,25 +1518,46 @@ function CuadreDiario() {
                                     onCambio={valor => handleCambioValor('servicio', valor)}
                                   />
                                 </div>
-                                {/* En móvil, mostrar % y comisión extra */}
-                                <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                {/* En móvil, mostrar % y comisión extra editables */}
+                                <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   {vale.tipo === 'Ingreso' && (
                                     <>
-                                      {(() => {
-                                        if (vale.dividirPorDos) {
-                                          if (typeof vale.dividirPorDos === 'string') {
-                                            return `${vale.dividirPorDos}%`;
-                                          } else {
-                                            return '50%';
-                                          }
-                                        } else {
-                                          return '100%';
-                                        }
-                                      })()}
-                                      {vale.comisionExtra > 0 && (
-                                        <span style={{ color: '#6366f1', fontWeight: 600 }}>
-                                          {' + $'}{Number(vale.comisionExtra).toLocaleString()}
-                                        </span>
+                                      {/* Porcentaje editable en móvil */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                        <span>%:</span>
+                                        <CeldaEditableExterna
+                                          esEditable={editandoVale === vale.id}
+                                          valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (() => {
+                                            if (vale.dividirPorDos) {
+                                              if (typeof vale.dividirPorDos === 'string') {
+                                                return vale.dividirPorDos;
+                                              } else {
+                                                return '50';
+                                              }
+                                            } else {
+                                              return '100';
+                                            }
+                                          })()}
+                                          onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                                          opciones={[
+                                            {value: '100', label: '100%'},
+                                            {value: '50', label: '50%'},
+                                            {value: '45', label: '45%'},
+                                            {value: '40', label: '40%'}
+                                          ]}
+                                        />
+                                      </div>
+                                      {/* Comisión extra */}
+                                      {(vale.comisionExtra > 0 || editandoVale === vale.id) && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                          <span style={{ color: '#6366f1', fontWeight: 600 }}>+$</span>
+                                          <CeldaEditableExterna
+                                            esEditable={editandoVale === vale.id}
+                                            valorActual={valoresEditados.comisionExtra !== undefined ? valoresEditados.comisionExtra : (vale.comisionExtra || 0)}
+                                            onCambio={valor => handleCambioValor('comisionExtra', Number(valor) || 0)}
+                                            tipo="number"
+                                          />
+                                        </div>
                                       )}
                                     </>
                                   )}
@@ -1600,9 +1621,10 @@ function CuadreDiario() {
                                         valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (vale.dividirPorDos || 50)}
                                         onCambio={valor => handleCambioValor('dividirPorDos', valor)}
                                         opciones={[
-                                          {value: 100, label: '100%'},
-                                          {value: 50, label: '50%'},
-                                          {value: 45, label: '45%'}
+                                          {value: '100', label: '100%'},
+                                          {value: '50', label: '50%'},
+                                          {value: '45', label: '45%'},
+                                          {value: '40', label: '40%'}
                                         ]}
                                       />
                                     </div>
@@ -2095,24 +2117,45 @@ function CuadreDiario() {
             {vale.formaPago && `${vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)}`}
             {vale.local && ` • ${vale.local}`}
           </div>
-          <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+          <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             {vale.tipo === 'Ingreso' && (
               <>
-                {(() => {
-                  let porcentaje = 50;
-                  if (vale.dividirPorDos) {
-                    if (typeof vale.dividirPorDos === 'string') {
-                      porcentaje = Number(vale.dividirPorDos);
-                    } else if (vale.dividirPorDos === true) {
-                      porcentaje = 50;
-                    }
-                  }
-                  return `${porcentaje}%`;
-                })()}
-                {vale.comisionExtra > 0 && (
-                  <span style={{ color: '#6366f1', fontWeight: 600 }}>
-                    {' + $'}{Number(vale.comisionExtra).toLocaleString()}
-                  </span>
+                {/* Porcentaje editable en móvil */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <span>%:</span>
+                  <CeldaEditableExterna
+                    esEditable={editandoVale === vale.id}
+                    valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (() => {
+                      if (vale.dividirPorDos) {
+                        if (typeof vale.dividirPorDos === 'string') {
+                          return vale.dividirPorDos;
+                        } else {
+                          return '50';
+                        }
+                      } else {
+                        return '100';
+                      }
+                    })()}
+                    onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                    opciones={[
+                      {value: '100', label: '100%'},
+                      {value: '50', label: '50%'},
+                      {value: '45', label: '45%'},
+                      {value: '40', label: '40%'}
+                    ]}
+                  />
+                </div>
+                {/* Comisión extra */}
+                {(vale.comisionExtra > 0 || editandoVale === vale.id) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ color: '#6366f1', fontWeight: 600 }}>+$</span>
+                    <CeldaEditableExterna
+                      esEditable={editandoVale === vale.id}
+                      valorActual={valoresEditados.comisionExtra !== undefined ? valoresEditados.comisionExtra : (vale.comisionExtra || 0)}
+                      onCambio={valor => handleCambioValor('comisionExtra', Number(valor) || 0)}
+                      tipo="number"
+                    />
+                  </div>
                 )}
               </>
             )}
@@ -2176,9 +2219,10 @@ function CuadreDiario() {
                   valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (vale.dividirPorDos || 50)}
                   onCambio={valor => handleCambioValor('dividirPorDos', valor)}
                   opciones={[
-                    {value: 100, label: '100%'},
-                    {value: 50, label: '50%'},
-                    {value: 45, label: '45%'}
+                    {value: '100', label: '100%'},
+                    {value: '50', label: '50%'},
+                    {value: '45', label: '45%'},
+                    {value: '40', label: '40%'}
                   ]}
                 />
               </div>

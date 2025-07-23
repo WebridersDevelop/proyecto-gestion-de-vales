@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, runTransaction, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
+import { getCardStyles, getBackdropFilter, getButtonStyles, getInputStyles } from '../utils/styleUtils';
 
 function ValesServicio() {
   const { user, rol, nombre } = useAuth();
@@ -249,12 +250,7 @@ function ValesServicio() {
     }}>
       <Row className="justify-content-center">
         <Col xs={12} md={10} lg={8} xl={7}>
-          <Card className="shadow-sm border-0" style={{
-            borderRadius: 24,
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)',
-            overflow: 'hidden'
-          }}>
+          <Card className="shadow-sm border-0" style={getCardStyles()}>
             <Card.Body className="p-0">
               {/* Header modernizado */}
               <div style={{
@@ -276,7 +272,7 @@ function ValesServicio() {
                           background: 'rgba(255,255,255,0.15)', 
                           padding: '8px 12px', 
                           borderRadius: '8px',
-                          backdropFilter: 'blur(10px)'
+                          ...getBackdropFilter('blur(10px)')
                         }}>
                           <small className="d-block opacity-90">
                             {fechaFiltro 
@@ -314,14 +310,13 @@ function ValesServicio() {
                           onChange={(e) => setServicio(e.target.value)}
                           placeholder="Ej: Corte, Barba, Color..."
                           disabled={loading}
-                          style={{
+                          style={getInputStyles({
                             border: '2px solid #e2e8f0',
                             borderRadius: '12px',
                             padding: '12px 16px',
-                            fontSize: '0.95rem',
                             transition: 'all 0.2s ease',
                             backgroundColor: '#f8fafc'
-                          }}
+                          })}
                           onFocus={(e) => e.target.style.borderColor = '#2563eb'}
                           onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                         />
@@ -347,14 +342,13 @@ function ValesServicio() {
                           onChange={(e) => setValor(e.target.value)}
                           placeholder="0"
                           disabled={loading}
-                          style={{
+                          style={getInputStyles({
                             border: '2px solid #e2e8f0',
                             borderRadius: '12px',
                             padding: '12px 16px',
-                            fontSize: '0.95rem',
                             transition: 'all 0.2s ease',
                             backgroundColor: '#f8fafc'
-                          }}
+                          })}
                           onFocus={(e) => e.target.style.borderColor = '#2563eb'}
                           onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                         />
@@ -366,7 +360,7 @@ function ValesServicio() {
                     <Button
                       type="submit"
                       disabled={loading}
-                      style={{
+                      style={getButtonStyles({
                         background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                         border: 'none',
                         borderRadius: '12px',
@@ -375,7 +369,7 @@ function ValesServicio() {
                         fontSize: '0.95rem',
                         boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
                         transition: 'all 0.2s ease'
-                      }}
+                      })}
                       onMouseEnter={(e) => e.target.style.transform = 'translateY(-1px)'}
                       onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
                     >
@@ -434,13 +428,12 @@ function ValesServicio() {
                         value={fechaFiltro}
                         onChange={(e) => setFechaFiltro(e.target.value)}
                         placeholder="Seleccionar fecha..."
-                        style={{
+                        style={getInputStyles({
                           border: '2px solid #cbd5e1',
                           borderRadius: '10px',
                           padding: '8px 12px',
-                          fontSize: '0.9rem',
                           backgroundColor: 'white'
-                        }}
+                        })}
                       />
                       <div className="mt-2 d-flex gap-2">
                         <Button
@@ -453,7 +446,7 @@ function ValesServicio() {
                             const day = String(hoy.getDate()).padStart(2, '0');
                             setFechaFiltro(`${year}-${month}-${day}`);
                           }}
-                          style={{ fontSize: '0.8rem' }}
+                          style={getButtonStyles({ fontSize: '0.8rem' })}
                         >
                           <i className="bi bi-calendar-day me-1"></i>
                           Hoy
@@ -462,7 +455,7 @@ function ValesServicio() {
                           variant="outline-secondary"
                           size="sm"
                           onClick={() => setFechaFiltro('')}
-                          style={{ fontSize: '0.8rem' }}
+                          style={getButtonStyles({ fontSize: '0.8rem' })}
                         >
                           <i className="bi bi-calendar3 me-1"></i>
                           Todos

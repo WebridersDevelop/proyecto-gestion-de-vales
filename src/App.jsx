@@ -13,6 +13,10 @@ import './App.css';
 import React, { useEffect } from 'react';
 import InstallPWAButton from './InstallPWAButton';
 import HomeObento from './pages/HomeObento';
+import { getDeviceInfo } from './utils/styleUtils';
+
+// Detectar plataforma al cargar la app
+const deviceInfo = getDeviceInfo();
 
 function AppContent() {
   const location = useLocation();
@@ -22,6 +26,26 @@ function AppContent() {
 
   // Mostrar menú inferior solo si no es login
   const showBottomMenu = !isLogin;
+
+  // Configuración específica para Android
+  useEffect(() => {
+    if (deviceInfo.isAndroid) {
+      // Prevenir zoom en inputs
+      const metaViewport = document.querySelector('meta[name="viewport"]');
+      if (metaViewport) {
+        metaViewport.setAttribute('content', 
+          'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover'
+        );
+      }
+      
+      // Deshabilitar context menu en Android
+      document.addEventListener('contextmenu', (e) => e.preventDefault());
+      
+      // Optimizar scroll para Android
+      document.body.style.overscrollBehavior = 'none';
+      document.body.style.touchAction = 'pan-y';
+    }
+  }, []);
 
   // Redirigir anfitrión siempre al inicio
   useEffect(() => {
