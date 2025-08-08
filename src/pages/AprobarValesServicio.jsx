@@ -112,8 +112,11 @@ function AprobarValesServicio() {
     return () => unsub();
   }, []);
 
-  // useEffect para extraer peluqueros únicos
+  // useEffect para extraer peluqueros únicos - OPTIMIZADO para evitar loops
   useEffect(() => {
+    // Solo actualizar si realmente hay cambios
+    if (valesServicio.length === 0 && valesGasto.length === 0) return;
+    
     const valesCombinados = [...valesServicio, ...valesGasto];
     const peluquerosSet = new Set();
     
@@ -124,8 +127,14 @@ function AprobarValesServicio() {
     });
     
     const peluquerosArray = Array.from(peluquerosSet).map(str => JSON.parse(str));
-    setPeluquerosUnicos(peluquerosArray.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-  }, [valesServicio, valesGasto]);
+    const sortedPeluqueros = peluquerosArray.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    
+    // Solo actualizar si hay cambios reales
+    setPeluquerosUnicos(prev => {
+      if (JSON.stringify(prev) === JSON.stringify(sortedPeluqueros)) return prev;
+      return sortedPeluqueros;
+    });
+  }, [valesServicio.length, valesGasto.length]); // Solo trigger en cambios de cantidad
 
   useEffect(() => {
     const valesCombinados = [...valesServicio, ...valesGasto];
