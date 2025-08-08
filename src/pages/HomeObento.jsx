@@ -1,8 +1,8 @@
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { Row, Col, Card, Badge } from 'react-bootstrap';
 import { useState, useEffect } from 'react';
-import { getButtonStyles, getDeviceInfo } from '../utils/styleUtils';
+import { getDeviceInfo } from '../utils/styleUtils';
 
 const deviceInfo = getDeviceInfo();
 
@@ -200,7 +200,7 @@ function HomeObento() {
               </Card.Title>
               
               <div className="d-flex flex-wrap justify-content-center gap-2" style={{ marginBottom: 10 }}>
-                {botones.map((btn, i) => (
+                {botones.map((btn) => (
                   <div key={btn.label} className="position-relative">
                     <button
                       type="button"

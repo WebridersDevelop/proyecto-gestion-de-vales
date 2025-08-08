@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { db } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Form, Button, Card, Row, Col, Alert } from 'react-bootstrap';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 function CrearUsuario() {
   const { rol } = useAuth();
@@ -35,7 +35,8 @@ function CrearUsuario() {
       setUid('');
       setRolUsuario('barbero'); // Valor de reseteo corregido
       setNombre('');
-    } catch (err) {
+    } catch (error) {
+      console.error('Error al crear usuario:', error);
       setMensaje('Error al crear usuario');
     }
     setLoading(false);

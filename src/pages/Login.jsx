@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo-peluqueria.png';
 
@@ -19,7 +19,8 @@ function Login() {
     try {
       await login({ email, password });
       navigate('/dashboard');
-    } catch (err) {
+    } catch (error) {
+      console.error('Error al iniciar sesión:', error);
       setError('Usuario o contraseña incorrectos');
     }
     setLoading(false);

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, runTransaction, getDocs, query, where } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { useAuth } from '../hooks/useAuth';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 import { getCardStyles, getBackdropFilter, getButtonStyles, getInputStyles } from '../utils/styleUtils';
 
@@ -28,58 +28,51 @@ function ValesServicio() {
   useEffect(() => {
     if (!user?.uid || !rol) return;
     setLoading(true);
-    const unsub = onSnapshot(collection(db, 'vales_servicio'), snap => {
+    
+    // Query optimizado con filtro directo
+    const q = query(
+      collection(db, 'vales_servicio'),
+      where('peluqueroUid', '==', user.uid),
+      orderBy('fecha', 'desc'),
+      limit(50) // Limitar a últimos 50 vales
+    );
+    
+    const unsub = onSnapshot(q, snap => {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
-        
-        // Determinar si mostrar el vale según el rol
-        let mostrarVale = false;
-        
-        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
-          // TODOS los roles autorizados SOLO ven SUS PROPIOS vales
-          // Comparación estricta de UID para garantizar privacidad total
-          mostrarVale = (data.peluqueroUid === user.uid);
-        }
-        
-        if (mostrarVale) {
-          vales.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
-          });
-        }
+        vales.push({
+          ...data,
+          id: docu.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
       });
-      vales.sort((a, b) => b.fecha - a.fecha);
       setValesUsuario(vales);
       setLoading(false);
     });
     return () => unsub();
-  }, [user?.uid, rol, mensaje]);
+  }, [user?.uid, rol]);
 
   useEffect(() => {
     if (!user?.uid || !rol) return;
-    const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
+    
+    // Query optimizado para vales de gasto
+    const q = query(
+      collection(db, 'vales_gasto'),
+      where('peluqueroUid', '==', user.uid),
+      orderBy('fecha', 'desc'),
+      limit(50)
+    );
+    
+    const unsub = onSnapshot(q, snap => {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
-        
-        // Determinar si mostrar el vale según el rol
-        let mostrarVale = false;
-        
-        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
-          // TODOS los roles autorizados SOLO ven SUS PROPIOS vales de gasto
-          // Comparación estricta de UID para garantizar privacidad total
-          mostrarVale = (data.peluqueroUid === user.uid);
-        }
-        
-        if (mostrarVale) {
-          vales.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
-          });
-        }
+        vales.push({
+          ...data,
+          id: docu.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
       });
       setValesGastoUsuario(vales);
     });

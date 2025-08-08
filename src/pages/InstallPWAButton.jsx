@@ -5,7 +5,7 @@ function InstallPWAButton() {
 
   React.useEffect(() => {
     const handler = (e) => {
-      console.log('beforeinstallprompt fired');
+      // console.log('beforeinstallprompt fired');
       e.preventDefault();
       setDeferredPrompt(e);
     };

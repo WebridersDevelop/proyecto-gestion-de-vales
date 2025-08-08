@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, updateDoc, doc, onSnapshot } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { collection, updateDoc, doc, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
+import { useAuth } from '../hooks/useAuth';
 import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form, Badge, ButtonGroup } from 'react-bootstrap';
 import { useMediaQuery } from 'react-responsive';
 import React from 'react';
@@ -20,11 +20,16 @@ function AprobarValesServicio() {
   const [formaPago, setFormaPago] = useState('');
   const [local, setLocal] = useState('');
   const [dividirPorDos, setDividirPorDos] = useState('100');
+  const [comisionExtra, setComisionExtra] = useState(0);
   
   // Nuevos estados para filtros y funcionalidades mejoradas
   const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos', 'servicio', 'gasto'
   const [filtroValor, setFiltroValor] = useState('todos'); // 'todos', 'alto', 'medio', 'bajo'
   const [busqueda, setBusqueda] = useState('');
+  const [filtroPeluquero, setFiltroPeluquero] = useState('todos'); // Nuevo filtro por peluquero
+  const [filtroFecha, setFiltroFecha] = useState(''); // Nuevo filtro por fecha
+  const [ordenamiento, setOrdenamiento] = useState('nuevo'); // 'nuevo', 'antiguo'
+  const [peluquerosUnicos, setPeluquerosUnicos] = useState([]); // Lista de peluqueros
   const [valesSeleccionados, setValesSeleccionados] = useState([]);
   const [showMasivo, setShowMasivo] = useState(false);
   
@@ -47,44 +52,71 @@ function AprobarValesServicio() {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'vales_servicio'), snap => {
+    // Query optimizado para vales de servicio pendientes
+    const qServicio = query(
+      collection(db, 'vales_servicio'),
+      where('estado', '==', 'pendiente'),
+      orderBy('fecha', 'desc'),
+      limit(100)
+    );
+    
+    const unsub = onSnapshot(qServicio, snap => {
       const arr = [];
       snap.forEach(docu => {
         const data = docu.data();
-        if (data.estado === 'pendiente') {
-          arr.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
-            coleccion: 'vales_servicio',
-            tipo: 'servicio'
-          });
-        }
+        arr.push({
+          ...data,
+          id: docu.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
+          coleccion: 'vales_servicio',
+          tipo: 'servicio'
+        });
       });
       setValesServicio(arr);
     });
     return () => unsub();
-  }, [mensaje]);
+  }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
+    // Query optimizado para vales de gasto pendientes
+    const qGasto = query(
+      collection(db, 'vales_gasto'),
+      where('estado', '==', 'pendiente'),
+      orderBy('fecha', 'desc'),
+      limit(100)
+    );
+    
+    const unsub = onSnapshot(qGasto, snap => {
       const arr = [];
       snap.forEach(docu => {
         const data = docu.data();
-        if (data.estado === 'pendiente') {
-          arr.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
-            coleccion: 'vales_gasto',
-            tipo: 'gasto'
-          });
-        }
+        arr.push({
+          ...data,
+          id: docu.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha),
+          coleccion: 'vales_gasto',
+          tipo: 'gasto'
+        });
       });
       setValesGasto(arr);
     });
     return () => unsub();
-  }, [mensaje]);
+  }, []);
+
+  // useEffect para extraer peluqueros únicos
+  useEffect(() => {
+    const valesCombinados = [...valesServicio, ...valesGasto];
+    const peluquerosSet = new Set();
+    
+    valesCombinados.forEach(vale => {
+      const nombrePeluquero = vale.peluqueroNombre || vale.peluquero || 'Sin nombre';
+      const emailPeluquero = vale.peluqueroEmail || '';
+      peluquerosSet.add(JSON.stringify({ nombre: nombrePeluquero, email: emailPeluquero }));
+    });
+    
+    const peluquerosArray = Array.from(peluquerosSet).map(str => JSON.parse(str));
+    setPeluquerosUnicos(peluquerosArray.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+  }, [valesServicio, valesGasto]);
 
   useEffect(() => {
     const valesCombinados = [...valesServicio, ...valesGasto];
@@ -108,21 +140,51 @@ function AprobarValesServicio() {
       });
     }
 
-    // Búsqueda por texto
+    // Filtro por peluquero
+    if (filtroPeluquero !== 'todos') {
+      const peluqueroSeleccionado = JSON.parse(filtroPeluquero);
+      valesFiltrados = valesFiltrados.filter(vale => {
+        const nombreVale = vale.peluqueroNombre || vale.peluquero || 'Sin nombre';
+        const emailVale = vale.peluqueroEmail || '';
+        return nombreVale === peluqueroSeleccionado.nombre && emailVale === peluqueroSeleccionado.email;
+      });
+    }
+
+    // Filtro por fecha
+    if (filtroFecha) {
+      const fechaSeleccionada = new Date(filtroFecha);
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+      const fechaSiguiente = new Date(fechaSeleccionada);
+      fechaSiguiente.setDate(fechaSiguiente.getDate() + 1);
+      
+      valesFiltrados = valesFiltrados.filter(vale => {
+        const fechaVale = new Date(vale.fecha);
+        fechaVale.setHours(0, 0, 0, 0);
+        return fechaVale >= fechaSeleccionada && fechaVale < fechaSiguiente;
+      });
+    }
+
+    // Búsqueda por texto (solo en servicio/concepto ahora, peluquero tiene su propio filtro)
     if (busqueda) {
       const termino = busqueda.toLowerCase();
       valesFiltrados = valesFiltrados.filter(vale =>
-        (vale.servicio || vale.concepto || '').toLowerCase().includes(termino) ||
-        (vale.peluqueroNombre || vale.peluquero || vale.peluqueroEmail || '').toLowerCase().includes(termino)
+        (vale.servicio || vale.concepto || '').toLowerCase().includes(termino)
       );
     }
 
-    const valesOrdenados = valesFiltrados.sort((a, b) => b.fecha - a.fecha);
+    // Ordenamiento
+    const valesOrdenados = valesFiltrados.sort((a, b) => {
+      if (ordenamiento === 'nuevo') {
+        return b.fecha - a.fecha; // Más nuevo primero
+      } else {
+        return a.fecha - b.fecha; // Más antiguo primero
+      }
+    });
     setValesPendientes(valesOrdenados);
     
     // Mejorar la lógica de loading
     setLoading(false);
-  }, [valesServicio, valesGasto, filtroTipo, filtroValor, busqueda]);
+  }, [valesServicio, valesGasto, filtroTipo, filtroValor, busqueda, filtroPeluquero, filtroFecha, ordenamiento]);
 
   const handleAccionVale = (vale, accion) => {
     setValeActual(vale);
@@ -131,6 +193,7 @@ function AprobarValesServicio() {
     setFormaPago('');
     setLocal('');
     setDividirPorDos('100'); // reset selector
+    setComisionExtra(Number(vale.comisionExtra) || 0); // Initialize with existing commission
     setShowModal(true);
   };
 
@@ -154,16 +217,20 @@ function AprobarValesServicio() {
           formaPago,
           ...(valeActual.tipo === 'servicio' ? {
             dividirPorDos, // Guarda el porcentaje seleccionado
-            comisionExtra: Number(valeActual.comisionExtra) || 0
-          } : {})
+            comisionExtra: Number(comisionExtra) || 0
+          } : {
+            comisionExtra: Number(comisionExtra) || 0 // También para gastos
+          })
         } : {})
       });
       setMensaje(accionModal === 'aprobar' ? '✅ Vale aprobado exitosamente' : '❌ Vale rechazado');
       setShowModal(false);
+      setComisionExtra(0); // Reset commission
       setTimeout(() => setMensaje(''), 2000);
     } catch {
       setMensaje('❌ Error al actualizar el vale');
       setShowModal(false);
+      setComisionExtra(0); // Reset commission on error too
       setTimeout(() => setMensaje(''), 2000);
     }
   };
@@ -366,8 +433,9 @@ function AprobarValesServicio() {
         boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
       }}>
         <Card.Body>
-          <Row className="align-items-end">
-            <Col md={3} className="mb-3">
+          {/* Primera fila de filtros */}
+          <Row className="align-items-end mb-3">
+            <Col lg={2} md={3} sm={6} className="mb-3">
               <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
                 <i className="bi bi-funnel me-2"></i>Tipo
               </Form.Label>
@@ -381,7 +449,7 @@ function AprobarValesServicio() {
                 <option value="gasto">Solo Gastos</option>
               </Form.Select>
             </Col>
-            <Col md={3} className="mb-3">
+            <Col lg={2} md={3} sm={6} className="mb-3">
               <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
                 <i className="bi bi-cash me-2"></i>Valor
               </Form.Label>
@@ -396,17 +464,96 @@ function AprobarValesServicio() {
                 <option value="bajo">Bajo (-$30k)</option>
               </Form.Select>
             </Col>
-            <Col md={4} className="mb-3">
+            <Col lg={3} md={4} className="mb-3">
               <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
-                <i className="bi bi-search me-2"></i>Búsqueda
+                <i className="bi bi-person me-2"></i>Peluquero
+              </Form.Label>
+              <Form.Select
+                value={filtroPeluquero}
+                onChange={(e) => setFiltroPeluquero(e.target.value)}
+                style={{ borderRadius: 12 }}
+              >
+                <option value="todos">Todos los peluqueros</option>
+                {peluquerosUnicos.map((peluquero, index) => (
+                  <option 
+                    key={index} 
+                    value={JSON.stringify(peluquero)}
+                  >
+                    {peluquero.nombre} {peluquero.email && `(${peluquero.email})`}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+            <Col lg={2} md={3} className="mb-3">
+              <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
+                <i className="bi bi-calendar me-2"></i>Fecha
+              </Form.Label>
+              <Form.Control
+                type="date"
+                value={filtroFecha}
+                onChange={(e) => setFiltroFecha(e.target.value)}
+                style={{ borderRadius: 12 }}
+              />
+            </Col>
+            <Col lg={2} md={3} className="mb-3">
+              <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
+                <i className="bi bi-sort-down me-2"></i>Orden
+              </Form.Label>
+              <Form.Select
+                value={ordenamiento}
+                onChange={(e) => setOrdenamiento(e.target.value)}
+                style={{ borderRadius: 12 }}
+              >
+                <option value="nuevo">Más nuevo</option>
+                <option value="antiguo">Más antiguo</option>
+              </Form.Select>
+            </Col>
+            <Col lg={1} className="mb-3">
+              {filtroFecha && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setFiltroFecha('')}
+                  style={{ borderRadius: 12, padding: '6px 12px' }}
+                  title="Limpiar filtro de fecha"
+                >
+                  <i className="bi bi-x-lg"></i>
+                </Button>
+              )}
+            </Col>
+          </Row>
+
+          {/* Segunda fila: Búsqueda y acciones */}
+          <Row className="align-items-end">
+            <Col md={6} className="mb-3">
+              <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
+                <i className="bi bi-search me-2"></i>Búsqueda por servicio/concepto
               </Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Buscar por servicio o peluquero..."
+                placeholder="Buscar por servicio o concepto..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 style={{ borderRadius: 12 }}
               />
+            </Col>
+            <Col md={4} className="mb-3">
+              {(filtroTipo !== 'todos' || filtroValor !== 'todos' || filtroPeluquero !== 'todos' || filtroFecha || busqueda) && (
+                <Button
+                  variant="outline-warning"
+                  onClick={() => {
+                    setFiltroTipo('todos');
+                    setFiltroValor('todos');
+                    setFiltroPeluquero('todos');
+                    setFiltroFecha('');
+                    setBusqueda('');
+                    setOrdenamiento('nuevo');
+                  }}
+                  style={{ borderRadius: 12, fontWeight: 600, width: '100%' }}
+                >
+                  <i className="bi bi-arrow-counterclockwise me-2"></i>
+                  Limpiar Filtros
+                </Button>
+              )}
             </Col>
             <Col md={2} className="mb-3">
               <div className="d-flex gap-2">
@@ -477,10 +624,45 @@ function AprobarValesServicio() {
           padding: '20px 24px'
         }}>
           <div className="d-flex justify-content-between align-items-center">
-            <h5 style={{ margin: 0, fontWeight: 700, color: '#1e293b' }}>
-              <i className="bi bi-list-check me-2"></i>
-              Vales Pendientes ({valesPendientes.length})
-            </h5>
+            <div>
+              <h5 style={{ margin: 0, fontWeight: 700, color: '#1e293b' }}>
+                <i className="bi bi-list-check me-2"></i>
+                Vales Pendientes ({valesPendientes.length})
+              </h5>
+              {/* Indicadores de filtros activos */}
+              <div className="d-flex gap-2 mt-2">
+                {filtroTipo !== 'todos' && (
+                  <Badge bg="info" style={{ borderRadius: 8 }}>
+                    Tipo: {filtroTipo === 'servicio' ? 'Servicios' : 'Gastos'}
+                  </Badge>
+                )}
+                {filtroValor !== 'todos' && (
+                  <Badge bg="info" style={{ borderRadius: 8 }}>
+                    Valor: {filtroValor}
+                  </Badge>
+                )}
+                {filtroPeluquero !== 'todos' && (
+                  <Badge bg="info" style={{ borderRadius: 8 }}>
+                    Peluquero: {JSON.parse(filtroPeluquero).nombre}
+                  </Badge>
+                )}
+                {filtroFecha && (
+                  <Badge bg="info" style={{ borderRadius: 8 }}>
+                    Fecha: {new Date(filtroFecha).toLocaleDateString()}
+                  </Badge>
+                )}
+                {busqueda && (
+                  <Badge bg="info" style={{ borderRadius: 8 }}>
+                    Búsqueda: "{busqueda}"
+                  </Badge>
+                )}
+                {ordenamiento !== 'nuevo' && (
+                  <Badge bg="secondary" style={{ borderRadius: 8 }}>
+                    Orden: Más antiguo
+                  </Badge>
+                )}
+              </div>
+            </div>
             {valesPendientes.length > 0 && (
               <Form.Check
                 type="checkbox"
@@ -1122,9 +1304,9 @@ function AprobarValesServicio() {
                         onChange={e => setDividirPorDos(e.target.value)}
                         style={{ borderRadius: 12 }}
                       >
-                        <option value="100">🎯 No dividir (100% para el profesional)</option>
-                        <option value="50">⚖️ Dividir 50/50 (50% profesional, 50% empresa)</option>
-                        <option value="45">📊 Dividir 45/55 (45% profesional, 55% empresa)</option>
+                        <option value="100">🎯 No dividir (100% para el peluquero)</option>
+                        <option value="50">⚖️ Dividir 50/50 (50% peluquero, 50% empresa)</option>
+                        <option value="45">📊 Dividir 45/55 (45% peluquero, 55% empresa)</option>
                       </Form.Select>
                     </Form.Group>
                     
@@ -1134,11 +1316,88 @@ function AprobarValesServicio() {
                           💰 Distribución del vale:
                         </div>
                         <div>
-                          👤 Profesional: <strong>{dividirPorDos}%</strong> = ${((Number(valeActual.valor) * Number(dividirPorDos)) / 100).toLocaleString()}
+                          👤 Peluquero: <strong>{dividirPorDos}%</strong> = ${((Number(valeActual.valor) * Number(dividirPorDos)) / 100).toLocaleString()}
                         </div>
                         <div>
                           🏢 Empresa: <strong>{100 - Number(dividirPorDos)}%</strong> = ${((Number(valeActual.valor) * (100 - Number(dividirPorDos))) / 100).toLocaleString()}
                         </div>
+                      </Alert>
+                    )}
+                  </Card.Body>
+                </Card>
+              )}
+
+              {/* Sección para agregar/editar comisión extra */}
+              {valeActual && (
+                <Card style={{ 
+                  border: '2px solid #f59e0b', 
+                  borderRadius: 12, 
+                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                  marginBottom: 16
+                }}>
+                  <Card.Body>
+                    <Form.Group className="mb-3">
+                      <Form.Label style={{ fontWeight: 600, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className="bi bi-cash-stack"></i>
+                        💰 Propina Extra (Opcional)
+                      </Form.Label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontWeight: 600, color: '#374151', fontSize: '1.2rem' }}>$</span>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step="1000"
+                          placeholder="0"
+                          value={comisionExtra}
+                          onChange={(e) => setComisionExtra(Number(e.target.value) || 0)}
+                          style={{ 
+                            borderRadius: 12, 
+                            border: '2px solid #f59e0b',
+                            fontSize: '1.1rem',
+                            fontWeight: 600
+                          }}
+                        />
+                      </div>
+                      <Form.Text style={{ color: '#92400e', fontWeight: 500 }}>
+                        {valeActual.tipo === 'servicio' 
+                          ? 'Esta propina va 100% al peluquero, adicional a su comisión por porcentaje'
+                          : 'Esta propina va 100% al peluquero, adicional al vale de gasto'
+                        }
+                      </Form.Text>
+                    </Form.Group>
+                    
+                    {comisionExtra > 0 && (
+                      <Alert variant="warning" style={{ borderRadius: 12, margin: 0 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                          🎯 Resumen total para el peluquero:
+                        </div>
+                        {valeActual.tipo === 'servicio' ? (
+                          <>
+                            <div>
+                              💼 Comisión por porcentaje: <strong>${((Number(valeActual.valor) * Number(dividirPorDos)) / 100).toLocaleString()}</strong>
+                            </div>
+                            <div>
+                              💰 Propina extra: <strong>+${Number(comisionExtra).toLocaleString()}</strong>
+                            </div>
+                            <hr style={{ margin: '8px 0', borderColor: '#f59e0b' }} />
+                            <div style={{ fontSize: '1.1rem' }}>
+                              🏆 <strong>Total peluquero: ${(((Number(valeActual.valor) * Number(dividirPorDos)) / 100) + Number(comisionExtra)).toLocaleString()}</strong>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              📋 Vale de gasto: <strong>${Number(valeActual.valor).toLocaleString()}</strong>
+                            </div>
+                            <div>
+                              💰 Propina extra: <strong>+${Number(comisionExtra).toLocaleString()}</strong>
+                            </div>
+                            <hr style={{ margin: '8px 0', borderColor: '#f59e0b' }} />
+                            <div style={{ fontSize: '1.1rem' }}>
+                              🏆 <strong>Total peluquero: ${(Number(valeActual.valor) + Number(comisionExtra)).toLocaleString()}</strong>
+                            </div>
+                          </>
+                        )}
                       </Alert>
                     )}
                   </Card.Body>

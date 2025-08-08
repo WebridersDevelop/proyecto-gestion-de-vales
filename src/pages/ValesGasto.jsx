@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase';
-import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, getDocs, onSnapshot } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, onSnapshot } from 'firebase/firestore';
+import { useAuth } from '../hooks/useAuth';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 import { getCardStyles, getBackdropFilter, getButtonStyles, getInputStyles } from '../utils/styleUtils';
 
@@ -151,6 +151,7 @@ function ValesGasto() {
         setLoading(false);
       }, 2000);
     } catch (error) {
+      console.error('Error al enviar el vale:', error);
       setMensaje('Error al enviar el vale');
       setTimeout(() => setMensaje(''), 2000);
       setLoading(false);

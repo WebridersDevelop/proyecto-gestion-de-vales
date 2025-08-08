@@ -1,10 +1,1089 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, deleteDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, getDocs, updateDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import { Card, Row, Col, Spinner, Alert, Table, Form, Button, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Componente de paginación
+const PaginacionComponente = ({ paginaActual, totalPaginas, totalItems, onCambioPagina, elementosPorPagina }) => {
+  if (totalPaginas <= 1) return null;
+
+  const getPaginasVisibles = () => {
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+
+    for (let i = Math.max(2, paginaActual - delta); i <= Math.min(totalPaginas - 1, paginaActual + delta); i++) {
+      range.push(i);
+    }
+
+    if (paginaActual - delta > 2) {
+      rangeWithDots.push(1, '...');
+    } else {
+      rangeWithDots.push(1);
+    }
+
+    rangeWithDots.push(...range);
+
+    if (paginaActual + delta < totalPaginas - 1) {
+      rangeWithDots.push('...', totalPaginas);
+    } else {
+      rangeWithDots.push(totalPaginas);
+    }
+
+    return rangeWithDots;
+  };
+
+  const startItem = (paginaActual - 1) * elementosPorPagina + 1;
+  const endItem = Math.min(paginaActual * elementosPorPagina, totalItems);
+
+  return (
+    <div className="d-flex justify-content-between align-items-center mt-3 p-3" style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+      {/* Información de paginación */}
+      <div style={{ fontSize: '12px', color: '#64748b' }}>
+        Mostrando {startItem}-{endItem} de {totalItems} registros
+      </div>
+
+      {/* Controles de paginación */}
+      <div className="d-flex align-items-center gap-1">
+        {/* Botón anterior */}
+        <Button
+          variant="outline-secondary"
+          size="sm"
+          onClick={() => onCambioPagina(paginaActual - 1)}
+          disabled={paginaActual === 1}
+          style={{ fontSize: '11px', padding: '4px 8px', minWidth: '32px' }}
+        >
+          ‹
+        </Button>
+
+        {/* Números de página */}
+        {getPaginasVisibles().map((pagina, index) => (
+          <span key={index}>
+            {pagina === '...' ? (
+              <span style={{ padding: '4px 8px', fontSize: '11px', color: '#64748b' }}>...</span>
+            ) : (
+              <Button
+                variant={pagina === paginaActual ? "primary" : "outline-secondary"}
+                size="sm"
+                onClick={() => onCambioPagina(pagina)}
+                style={{ 
+                  fontSize: '11px', 
+                  padding: '4px 8px', 
+                  minWidth: '32px',
+                  fontWeight: pagina === paginaActual ? 600 : 400
+                }}
+              >
+                {pagina}
+              </Button>
+            )}
+          </span>
+        ))}
+
+        {/* Botón siguiente */}
+        <Button
+          variant="outline-secondary"
+          size="sm"
+          onClick={() => onCambioPagina(paginaActual + 1)}
+          disabled={paginaActual === totalPaginas}
+          style={{ fontSize: '11px', padding: '4px 8px', minWidth: '32px' }}
+        >
+          ›
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// Componente de lista compacta para móvil (ideal para alto volumen)
+const ListaCompactaVale = ({ vale, editandoVale, valoresEditados, handleCambioValor, nombresUsuarios, guardarEdicion, cancelarEdicion, setEditandoVale, handleEliminar, rol }) => {
+  const montoPercibido = vale.tipo === 'Ingreso' && vale.estado === 'aprobado' 
+    ? (() => {
+        let porcentajeProfesional = 50;
+        if (vale.dividirPorDos) {
+          if (typeof vale.dividirPorDos === 'string') {
+            porcentajeProfesional = parseFloat(vale.dividirPorDos) || 50;
+          } else {
+            porcentajeProfesional = 50;
+          }
+        } else {
+          porcentajeProfesional = 100;
+        }
+        const monto = parseFloat(vale.valor || vale.monto) || 0;
+        const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+        return ((monto * porcentajeProfesional / 100) + comisionExtra).toFixed(0);
+      })()
+    : '0';
+
+  return (
+    <div 
+      className="mb-2 p-2"
+      style={{
+        border: `1px solid ${
+          editandoVale === vale.id 
+            ? '#6366f1' 
+            : vale.estado === 'aprobado'
+            ? '#22c55e'
+            : vale.estado === 'rechazado'
+            ? '#dc3545'
+            : '#f59e42'
+        }`,
+        borderRadius: 8,
+        background: editandoVale === vale.id 
+          ? '#f8fafc' 
+          : vale.estado === 'rechazado'
+          ? '#fef2f2'
+          : vale.estado === 'aprobado'
+          ? '#f0fdf4'
+          : '#fffbeb',
+        borderLeft: `4px solid ${
+          vale.estado === 'aprobado' ? '#22c55e' : 
+          vale.estado === 'rechazado' ? '#dc3545' : '#f59e42'
+        }`
+      }}
+    >
+      {/* Primera línea: Info principal */}
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <div className="d-flex align-items-center gap-2 flex-grow-1">
+          {/* Badges compactos con mejor visibilidad */}
+          <span 
+            className={`badge d-flex align-items-center justify-content-center ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} 
+            style={{ 
+              fontSize: '8px', 
+              padding: '3px 6px',
+              minHeight: '16px',
+              lineHeight: '1',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}
+          >
+            {vale.tipo === 'Ingreso' ? '↗ ING' : '↙ EGR'}
+          </span>
+          
+          {/* Nombre del profesional */}
+          <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {editandoVale === vale.id ? (
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.peluquero !== undefined ? valoresEditados.peluquero : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || 'Desconocido')}
+                onCambio={valor => handleCambioValor('peluquero', valor)}
+                tipo="text"
+              />
+            ) : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || 'Desconocido')}
+          </div>
+          
+          {/* Servicio */}
+          <div style={{ fontSize: '12px', color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {editandoVale === vale.id ? (
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.servicio !== undefined ? valoresEditados.servicio : (vale.servicio || vale.concepto || 'Sin descripción')}
+                onCambio={valor => handleCambioValor('servicio', valor)}
+                tipo="text"
+              />
+            ) : (vale.servicio || vale.concepto || 'Sin descripción')}
+          </div>
+        </div>
+        
+        {/* Monto y detalles financieros */}
+        <div className="text-end">
+          <div style={{ fontSize: '14px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545' }}>
+            ${vale.valor || vale.monto || '0'}
+          </div>
+          
+          {/* Información financiera para ingresos */}
+          {vale.tipo === 'Ingreso' && (
+            <div style={{ fontSize: '9px', color: '#64748b' }}>
+              {(() => {
+                const porcentaje = vale.dividirPorDos 
+                  ? (typeof vale.dividirPorDos === 'string' ? vale.dividirPorDos : '50')
+                  : '100';
+                const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+                
+                return (
+                  <>
+                    <div>{porcentaje}% peluquero{comisionExtra > 0 ? ` +$${comisionExtra} extra` : ''}</div>
+                    {vale.estado === 'aprobado' && (
+                      <div style={{ fontWeight: 600, color: '#22c55e' }}>
+                        Recibe: ${montoPercibido}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+          
+          {/* Hora */}
+          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+            {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      </div>
+
+      {/* Segunda línea: Detalles adicionales y acciones */}
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="d-flex align-items-center gap-2" style={{ fontSize: '10px', color: '#64748b', flexWrap: 'wrap' }}>
+          {/* Estado con mejor alineación */}
+          <span 
+            className={`badge d-flex align-items-center justify-content-center ${
+              vale.estado === 'aprobado' ? 'bg-success' : 
+              vale.estado === 'rechazado' ? 'bg-danger' : 'bg-warning text-dark'
+            }`} 
+            style={{ 
+              fontSize: '9px', 
+              padding: '3px 6px',
+              minHeight: '18px',
+              lineHeight: '1',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}
+          >
+            {vale.estado === 'aprobado' ? '✓ APROBADO' : 
+             vale.estado === 'rechazado' ? '✗ RECHAZADO' : '⏳ PENDIENTE'}
+          </span>
+          
+          {/* Información adicional compacta con mejor espaciado */}
+          <div className="d-flex align-items-center gap-2" style={{ fontSize: '10px' }}>
+            {vale.formaPago && (
+              <span style={{ 
+                background: '#f1f5f9', 
+                padding: '2px 6px', 
+                borderRadius: 4, 
+                color: '#475569',
+                fontWeight: 500
+              }}>
+                {vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)}
+              </span>
+            )}
+            {vale.local && (
+              <span style={{ 
+                background: '#f1f5f9', 
+                padding: '2px 6px', 
+                borderRadius: 4, 
+                color: '#475569',
+                fontWeight: 500
+              }}>
+                📍 {vale.local}
+              </span>
+            )}
+            {vale.tipo === 'Ingreso' && vale.estado === 'aprobado' && (
+              <span style={{ 
+                background: '#dcfce7', 
+                padding: '2px 6px', 
+                borderRadius: 4, 
+                color: '#166534',
+                fontWeight: 600
+              }}>
+                💵 Recibe ${montoPercibido}
+              </span>
+            )}
+            {vale.codigo && (
+              <span style={{ 
+                background: '#e0e7ff', 
+                padding: '2px 6px', 
+                borderRadius: 4, 
+                color: '#3730a3',
+                fontWeight: 500
+              }}>
+                #{vale.codigo}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Botones de acción compactos */}
+        <div className="d-flex gap-1">
+          {editandoVale === vale.id ? (
+            <>
+              <Button 
+                size="sm" 
+                variant="success"
+                onClick={() => guardarEdicion(vale)}
+                style={{ fontSize: '9px', padding: '2px 6px', minWidth: '24px', minHeight: '24px' }}
+              >
+                ✓
+              </Button>
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={cancelarEdicion}
+                style={{ fontSize: '9px', padding: '2px 6px', minWidth: '24px', minHeight: '24px' }}
+              >
+                ✕
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                size="sm" 
+                variant="outline-primary"
+                onClick={() => setEditandoVale(vale.id)}
+                style={{ fontSize: '9px', padding: '2px 6px', minWidth: '24px', minHeight: '24px' }}
+              >
+                ✎
+              </Button>
+              {(rol === 'admin' || rol === 'anfitrion') && (
+                <Button 
+                  size="sm" 
+                  variant="outline-danger"
+                  onClick={() => handleEliminar(vale.id)}
+                  style={{ fontSize: '9px', padding: '2px 6px', minWidth: '24px', minHeight: '24px' }}
+                >
+                  🗑
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Fila de edición expandida (solo si está editando) */}
+      {editandoVale === vale.id && (
+        <div className="mt-2 pt-2 border-top" style={{ borderTopColor: '#e5e7eb !important' }}>
+          <div className="row g-2" style={{ fontSize: '11px' }}>
+            <div className="col-6">
+              <label className="form-label mb-1" style={{ fontSize: '9px', fontWeight: 600, color: '#64748b' }}>Fecha:</label>
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString('es-ES')}
+                onCambio={valor => handleCambioValor('fecha', valor)}
+                tipo="date"
+              />
+            </div>
+            <div className="col-6">
+              <label className="form-label mb-1" style={{ fontSize: '9px', fontWeight: 600, color: '#64748b' }}>Pago:</label>
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : vale.formaPago}
+                onCambio={valor => handleCambioValor('formaPago', valor)}
+                opciones={[
+                  {value: 'efectivo', label: 'Efectivo'},
+                  {value: 'tarjeta', label: 'Tarjeta'},
+                  {value: 'transferencia', label: 'Transferencia'},
+                  {value: 'mixto', label: 'Mixto'}
+                ]}
+              />
+            </div>
+            {vale.tipo === 'Ingreso' && (
+              <div className="col-6">
+                <label className="form-label mb-1" style={{ fontSize: '9px', fontWeight: 600, color: '#64748b' }}>% Prof:</label>
+                <CeldaEditableExterna
+                  esEditable={true}
+                  valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (() => {
+                    if (vale.dividirPorDos) {
+                      if (typeof vale.dividirPorDos === 'string') {
+                        return vale.dividirPorDos;
+                      } else {
+                        return '50';
+                      }
+                    } else {
+                      return '100';
+                    }
+                  })()}
+                  onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                  opciones={[
+                    {value: '100', label: '100%'},
+                    {value: '50', label: '50%'},
+                    {value: '40', label: '40%'},
+                    {value: '30', label: '30%'}
+                  ]}
+                />
+              </div>
+            )}
+            <div className="col-6">
+              <label className="form-label mb-1" style={{ fontSize: '9px', fontWeight: 600, color: '#64748b' }}>Local:</label>
+              <CeldaEditableExterna
+                esEditable={true}
+                valorActual={valoresEditados.local !== undefined ? valoresEditados.local : vale.local}
+                onCambio={valor => handleCambioValor('local', valor)}
+                tipo="text"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Componente de tarjeta para desktop y tablet (optimizado para pantallas grandes)
+const TarjetaValeDesktop = ({ vale, editandoVale, valoresEditados, handleCambioValor, nombresUsuarios, guardarEdicion, cancelarEdicion, setEditandoVale, handleEliminar, rol, screenSize }) => {
+  const montoPercibido = vale.tipo === 'Ingreso' && vale.estado === 'aprobado' 
+    ? (() => {
+        let porcentajeProfesional = 50;
+        if (vale.dividirPorDos) {
+          if (typeof vale.dividirPorDos === 'string') {
+            porcentajeProfesional = parseFloat(vale.dividirPorDos) || 50;
+          } else {
+            porcentajeProfesional = 50;
+          }
+        } else {
+          porcentajeProfesional = 100;
+        }
+        const monto = parseFloat(vale.valor || vale.monto) || 0;
+        const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+        return ((monto * porcentajeProfesional / 100) + comisionExtra).toFixed(0);
+      })()
+    : '0';
+
+  const isDesktop = screenSize.isDesktop;
+  const cardWidth = isDesktop ? '100%' : '100%';
+  const cardLayout = isDesktop ? 'horizontal' : 'vertical';
+
+  return (
+    <Card 
+      className="mb-3"
+      style={{
+        border: `2px solid ${
+          editandoVale === vale.id 
+            ? '#6366f1' 
+            : vale.estado === 'aprobado'
+            ? '#22c55e'
+            : vale.estado === 'rechazado'
+            ? '#dc3545'
+            : '#f59e42'
+        }`,
+        borderRadius: 16,
+        boxShadow: editandoVale === vale.id 
+          ? '0 8px 32px rgba(99, 102, 241, 0.2)' 
+          : '0 4px 16px rgba(0,0,0,0.08)',
+        background: editandoVale === vale.id 
+          ? '#f8fafc' 
+          : vale.estado === 'rechazado'
+          ? '#fef2f2'
+          : vale.estado === 'aprobado'
+          ? '#f0fdf4'
+          : '#fffbeb',
+        width: cardWidth,
+        transition: 'all 0.3s ease',
+        cursor: 'pointer'
+      }}
+      onMouseEnter={(e) => {
+        if (editandoVale !== vale.id) {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (editandoVale !== vale.id) {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)';
+        }
+      }}
+    >
+      <Card.Body style={{ padding: isDesktop ? '20px' : '16px' }}>
+        {/* Layout horizontal para desktop, vertical para tablet */}
+        <div className={`d-flex ${cardLayout === 'horizontal' ? 'flex-row' : 'flex-column'} gap-3`}>
+          
+          {/* Columna izquierda - Información principal */}
+          <div className={`${cardLayout === 'horizontal' ? 'flex-grow-1' : 'w-100'}`}>
+            {/* Header con badges */}
+            <div className="d-flex align-items-center gap-3 mb-3">
+              <div className="d-flex align-items-center gap-2">
+                <span 
+                  className={`badge d-flex align-items-center justify-content-center ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} 
+                  style={{ 
+                    fontSize: '11px', 
+                    padding: '6px 12px',
+                    minHeight: '24px',
+                    lineHeight: '1',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  {vale.tipo === 'Ingreso' ? '↗ INGRESO' : '↙ EGRESO'}
+                </span>
+                <span 
+                  className={`badge d-flex align-items-center justify-content-center ${
+                    vale.estado === 'aprobado' ? 'bg-success' : 
+                    vale.estado === 'rechazado' ? 'bg-danger' : 'bg-warning text-dark'
+                  }`} 
+                  style={{ 
+                    fontSize: '11px', 
+                    padding: '6px 12px',
+                    minHeight: '24px',
+                    lineHeight: '1',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  {vale.estado === 'aprobado' ? '✓ APROBADO' : 
+                   vale.estado === 'rechazado' ? '✗ RECHAZADO' : '⏳ PENDIENTE'}
+                </span>
+                {vale.codigo && (
+                  <span 
+                    className="badge bg-secondary d-flex align-items-center justify-content-center" 
+                    style={{ 
+                      fontSize: '10px', 
+                      padding: '4px 8px',
+                      minHeight: '22px',
+                      lineHeight: '1',
+                      fontWeight: 500
+                    }}
+                  >
+                    #{vale.codigo}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Información del profesional y servicio */}
+            <div className="mb-3">
+              <div style={{ fontSize: isDesktop ? '18px' : '16px', fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>
+                <CeldaEditableExterna
+                  esEditable={editandoVale === vale.id}
+                  valorActual={valoresEditados.peluquero !== undefined ? valoresEditados.peluquero : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido')}
+                  onCambio={valor => handleCambioValor('peluquero', valor)}
+                  tipo="text"
+                />
+              </div>
+              <div style={{ fontSize: isDesktop ? '15px' : '14px', fontWeight: 500, color: '#64748b' }}>
+                <CeldaEditableExterna
+                  esEditable={editandoVale === vale.id}
+                  valorActual={valoresEditados.servicio !== undefined ? valoresEditados.servicio : (vale.servicio || vale.concepto || 'Sin descripción')}
+                  onCambio={valor => handleCambioValor('servicio', valor)}
+                  tipo="text"
+                />
+              </div>
+            </div>
+
+            {/* Detalles en grid para desktop */}
+            {isDesktop && (
+              <div className="row g-3 mb-3">
+                <div className="col-4">
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>📅 Fecha</div>
+                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                    <CeldaEditableExterna
+                      esEditable={editandoVale === vale.id}
+                      valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString('es-ES')}
+                      onCambio={valor => handleCambioValor('fecha', valor)}
+                      tipo="date"
+                    />
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>🕒 Hora</div>
+                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                    {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>💳 Pago</div>
+                  <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                    <CeldaEditableExterna
+                      esEditable={editandoVale === vale.id}
+                      valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : (vale.formaPago || 'No especificado')}
+                      onCambio={valor => handleCambioValor('formaPago', valor)}
+                      opciones={[
+                        {value: 'efectivo', label: 'Efectivo'},
+                        {value: 'tarjeta', label: 'Tarjeta'},
+                        {value: 'transferencia', label: 'Transferencia'},
+                        {value: 'mixto', label: 'Mixto'}
+                      ]}
+                    />
+                  </div>
+                </div>
+                {vale.local && (
+                  <div className="col-4">
+                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>📍 Local</div>
+                    <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                      <CeldaEditableExterna
+                        esEditable={editandoVale === vale.id}
+                        valorActual={valoresEditados.local !== undefined ? valoresEditados.local : vale.local}
+                        onCambio={valor => handleCambioValor('local', valor)}
+                        tipo="text"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Columna derecha - Información financiera */}
+          <div className={`${cardLayout === 'horizontal' ? 'flex-shrink-0' : 'w-100'}`} style={{ minWidth: cardLayout === 'horizontal' ? '280px' : 'auto' }}>
+            {/* Monto principal */}
+            <div className="text-center mb-3" style={{ 
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%)',
+              borderRadius: 12,
+              padding: isDesktop ? '20px' : '16px'
+            }}>
+              <div style={{ fontSize: isDesktop ? '24px' : '20px', fontWeight: 800, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', marginBottom: '8px' }}>
+                ${vale.valor || vale.monto || '0'}
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Monto {vale.tipo === 'Ingreso' ? 'de Ingreso' : 'de Egreso'}
+              </div>
+            </div>
+
+            {/* Información financiera detallada para ingresos */}
+            {vale.tipo === 'Ingreso' && (
+              <div className="mb-3">
+                {(() => {
+                  const porcentaje = vale.dividirPorDos 
+                    ? (typeof vale.dividirPorDos === 'string' ? vale.dividirPorDos : '50')
+                    : '100';
+                  const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+                  
+                  return (
+                    <div style={{ 
+                      background: 'rgba(34, 197, 94, 0.05)',
+                      borderRadius: 12,
+                      padding: '16px',
+                      border: '1px solid rgba(34, 197, 94, 0.2)'
+                    }}>
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>💸 Porcentaje para el peluquero</span>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: '#22c55e' }}>
+                          <CeldaEditableExterna
+                            esEditable={editandoVale === vale.id}
+                            valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : porcentaje}
+                            onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                            opciones={[
+                              {value: '100', label: '100%'},
+                              {value: '50', label: '50%'},
+                              {value: '40', label: '40%'},
+                              {value: '30', label: '30%'}
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      
+                      {(comisionExtra > 0 || editandoVale === vale.id) && (
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <span style={{ fontSize: '13px', color: '#64748b' }}>➕ Propina extra</span>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: '#6366f1' }}>
+                            <CeldaEditableExterna
+                              esEditable={editandoVale === vale.id}
+                              valorActual={valoresEditados.comisionExtra !== undefined ? valoresEditados.comisionExtra : (comisionExtra || 0)}
+                              onCambio={valor => handleCambioValor('comisionExtra', Number(valor) || 0)}
+                              tipo="number"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {vale.estado === 'aprobado' && (
+                        <div style={{ 
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          borderRadius: 8,
+                          padding: '12px',
+                          marginTop: '8px',
+                          borderLeft: '4px solid #22c55e'
+                        }}>
+                          <div className="d-flex align-items-center justify-content-between">
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: '#166534' }}>💵 El peluquero recibe</span>
+                            <span style={{ fontSize: isDesktop ? '18px' : '16px', fontWeight: 800, color: '#22c55e' }}>
+                              ${montoPercibido}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Observaciones */}
+            {(vale.observacion || editandoVale === vale.id) && (
+              <div className="mb-3">
+                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>📝 Observaciones</div>
+                <div style={{ 
+                  background: '#f8fafc',
+                  borderRadius: 8,
+                  padding: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <CeldaEditableExterna
+                    esEditable={editandoVale === vale.id}
+                    valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '')}
+                    onCambio={valor => handleCambioValor('observacion', valor)}
+                    tipo="text"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div className="d-flex gap-2 justify-content-end">
+              {editandoVale === vale.id ? (
+                <>
+                  <Button 
+                    variant="success"
+                    onClick={() => guardarEdicion(vale)}
+                    style={{ 
+                      fontSize: '13px', 
+                      padding: '8px 16px',
+                      fontWeight: 600,
+                      borderRadius: 8
+                    }}
+                  >
+                    ✓ Guardar Cambios
+                  </Button>
+                  <Button 
+                    variant="secondary"
+                    onClick={cancelarEdicion}
+                    style={{ 
+                      fontSize: '13px', 
+                      padding: '8px 16px',
+                      fontWeight: 600,
+                      borderRadius: 8
+                    }}
+                  >
+                    ✕ Cancelar
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline-primary"
+                    onClick={() => setEditandoVale(vale.id)}
+                    style={{ 
+                      fontSize: '13px', 
+                      padding: '8px 16px',
+                      fontWeight: 600,
+                      borderRadius: 8
+                    }}
+                  >
+                    ✎ Editar
+                  </Button>
+                  {(rol === 'admin' || rol === 'anfitrion') && (
+                    <Button 
+                      variant="outline-danger"
+                      onClick={() => handleEliminar(vale.id)}
+                      style={{ 
+                        fontSize: '13px', 
+                        padding: '8px 16px',
+                        fontWeight: 600,
+                        borderRadius: 8
+                      }}
+                    >
+                      🗑 Eliminar
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card.Body>
+    </Card>
+  );
+};
+
+// Componente de tarjeta para móvil (para casos específicos)
+const TarjetaVale = ({ vale, editandoVale, valoresEditados, handleCambioValor, nombresUsuarios, guardarEdicion, cancelarEdicion, setEditandoVale, handleEliminar, rol }) => {
+  const montoPercibido = vale.tipo === 'Ingreso' && vale.estado === 'aprobado' 
+    ? (() => {
+        let porcentajeProfesional = 50;
+        if (vale.dividirPorDos) {
+          if (typeof vale.dividirPorDos === 'string') {
+            porcentajeProfesional = parseFloat(vale.dividirPorDos) || 50;
+          } else {
+            porcentajeProfesional = 50;
+          }
+        } else {
+          porcentajeProfesional = 100;
+        }
+        const monto = parseFloat(vale.valor || vale.monto) || 0;
+        const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+        return ((monto * porcentajeProfesional / 100) + comisionExtra).toFixed(0);
+      })()
+    : '0';
+
+  return (
+    <Card 
+      className="mb-3"
+      style={{
+        border: `2px solid ${
+          editandoVale === vale.id 
+            ? '#6366f1' 
+            : vale.estado === 'aprobado'
+            ? '#22c55e'
+            : vale.estado === 'rechazado'
+            ? '#dc3545'
+            : '#f59e42'
+        }`,
+        borderRadius: 12,
+        boxShadow: editandoVale === vale.id 
+          ? '0 4px 12px rgba(99, 102, 241, 0.2)' 
+          : '0 2px 8px rgba(0,0,0,0.1)',
+        background: editandoVale === vale.id 
+          ? '#f8fafc' 
+          : vale.estado === 'rechazado'
+          ? '#fef2f2'
+          : vale.estado === 'aprobado'
+          ? '#f0fdf4'
+          : '#fffbeb'
+      }}
+    >
+      <Card.Body style={{ padding: '12px' }}>
+        {/* Header de la tarjeta */}
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <span 
+                className={`badge d-flex align-items-center justify-content-center ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} 
+                style={{ 
+                  fontSize: '10px', 
+                  padding: '4px 8px',
+                  minHeight: '20px',
+                  lineHeight: '1',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                {vale.tipo === 'Ingreso' ? '↗ INGRESO' : '↙ EGRESO'}
+              </span>
+              <span 
+                className={`badge d-flex align-items-center justify-content-center ${
+                  vale.estado === 'aprobado' ? 'bg-success' : 
+                  vale.estado === 'rechazado' ? 'bg-danger' : 'bg-warning text-dark'
+                }`} 
+                style={{ 
+                  fontSize: '10px', 
+                  padding: '4px 8px',
+                  minHeight: '20px',
+                  lineHeight: '1',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}
+              >
+                {vale.estado === 'aprobado' ? '✓ APROBADO' : 
+                 vale.estado === 'rechazado' ? '✗ RECHAZADO' : '⏳ PENDIENTE'}
+              </span>
+              {vale.codigo && (
+                <span 
+                  className="badge bg-secondary d-flex align-items-center justify-content-center" 
+                  style={{ 
+                    fontSize: '9px', 
+                    padding: '3px 6px',
+                    minHeight: '18px',
+                    lineHeight: '1',
+                    fontWeight: 500
+                  }}
+                >
+                  #{vale.codigo}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
+              <CeldaEditableExterna
+                esEditable={editandoVale === vale.id}
+                valorActual={valoresEditados.peluquero !== undefined ? valoresEditados.peluquero : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido')}
+                onCambio={valor => handleCambioValor('peluquero', valor)}
+                tipo="text"
+              />
+            </div>
+          </div>
+          <div className="text-end">
+            <div style={{ fontSize: '16px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545' }}>
+              ${vale.valor || vale.monto || '0'}
+            </div>
+            
+            {/* Información financiera detallada para ingresos */}
+            {vale.tipo === 'Ingreso' && (
+              <div style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.3', marginTop: '4px' }}>
+                {(() => {
+                  const porcentaje = vale.dividirPorDos 
+                    ? (typeof vale.dividirPorDos === 'string' ? vale.dividirPorDos : '50')
+                    : '100';
+                  const comisionExtra = parseFloat(vale.comisionExtra) || 0;
+                  
+                  return (
+                    <>
+                      <div style={{ marginBottom: '2px' }}>
+                        <span style={{ fontWeight: 500 }}>💸 {porcentaje}% para el peluquero</span>
+                      </div>
+                      
+                      {comisionExtra > 0 && (
+                        <div style={{ marginBottom: '2px', color: '#6366f1' }}>
+                          <span style={{ fontWeight: 500 }}>➕ ${comisionExtra} propina extra</span>
+                        </div>
+                      )}
+                      
+                      {vale.estado === 'aprobado' && (
+                        <div style={{ 
+                          fontWeight: 700, 
+                          color: '#22c55e',
+                          fontSize: '12px',
+                          padding: '2px 6px',
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          borderRadius: 4,
+                          marginTop: '2px'
+                        }}>
+                          💵 El peluquero recibe: ${montoPercibido}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Información principal */}
+        <div className="mb-2">
+          <div style={{ fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+            <CeldaEditableExterna
+              esEditable={editandoVale === vale.id}
+              valorActual={valoresEditados.servicio !== undefined ? valoresEditados.servicio : (vale.servicio || vale.concepto || 'Sin descripción')}
+              onCambio={valor => handleCambioValor('servicio', valor)}
+              tipo="text"
+            />
+          </div>
+        </div>
+
+        {/* Detalles secundarios */}
+        <div className="row g-2 mb-2" style={{ fontSize: '12px', color: '#64748b' }}>
+          <div className="col-6">
+            <strong>Fecha:</strong> 
+            <CeldaEditableExterna
+              esEditable={editandoVale === vale.id}
+              valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString('es-ES')}
+              onCambio={valor => handleCambioValor('fecha', valor)}
+              tipo="date"
+            />
+          </div>
+          <div className="col-6">
+            <strong>Hora:</strong> {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+          {vale.formaPago && (
+            <div className="col-6">
+              <strong>Pago:</strong> 
+              <CeldaEditableExterna
+                esEditable={editandoVale === vale.id}
+                valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : vale.formaPago}
+                onCambio={valor => handleCambioValor('formaPago', valor)}
+                opciones={[
+                  {value: 'efectivo', label: 'Efectivo'},
+                  {value: 'tarjeta', label: 'Tarjeta'},
+                  {value: 'transferencia', label: 'Transferencia'},
+                  {value: 'mixto', label: 'Mixto'}
+                ]}
+              />
+            </div>
+          )}
+          {vale.local && (
+            <div className="col-6">
+              <strong>Local:</strong> 
+              <CeldaEditableExterna
+                esEditable={editandoVale === vale.id}
+                valorActual={valoresEditados.local !== undefined ? valoresEditados.local : vale.local}
+                onCambio={valor => handleCambioValor('local', valor)}
+                tipo="text"
+              />
+            </div>
+          )}
+          {vale.tipo === 'Ingreso' && (
+            <div className="col-6">
+              <strong>% Prof:</strong> 
+              <CeldaEditableExterna
+                esEditable={editandoVale === vale.id}
+                valorActual={valoresEditados.dividirPorDos !== undefined ? valoresEditados.dividirPorDos : (() => {
+                  if (vale.dividirPorDos) {
+                    if (typeof vale.dividirPorDos === 'string') {
+                      return vale.dividirPorDos;
+                    } else {
+                      return '50';
+                    }
+                  } else {
+                    return '100';
+                  }
+                })()}
+                onCambio={valor => handleCambioValor('dividirPorDos', valor)}
+                opciones={[
+                  {value: '100', label: '100%'},
+                  {value: '50', label: '50%'},
+                  {value: '40', label: '40%'},
+                  {value: '30', label: '30%'}
+                ]}
+              />
+            </div>
+          )}
+          {vale.comisionExtra && parseFloat(vale.comisionExtra) > 0 && (
+            <div className="col-6">
+              <strong>Comisión Extra:</strong> ${vale.comisionExtra}
+            </div>
+          )}
+        </div>
+
+        {/* Observaciones */}
+        {(vale.observacion || editandoVale === vale.id) && (
+          <div className="mb-2">
+            <div style={{ fontSize: '12px', color: '#64748b' }}>
+              <strong>Observación:</strong>
+            </div>
+            <div style={{ fontSize: '12px' }}>
+              <CeldaEditableExterna
+                esEditable={editandoVale === vale.id}
+                valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '')}
+                onCambio={valor => handleCambioValor('observacion', valor)}
+                tipo="text"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Botones de acción */}
+        <div className="d-flex gap-2 justify-content-end">
+          {editandoVale === vale.id ? (
+            <>
+              <Button 
+                size="sm" 
+                variant="success"
+                onClick={() => guardarEdicion(vale)}
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                ✓ Guardar
+              </Button>
+              <Button 
+                size="sm" 
+                variant="secondary"
+                onClick={cancelarEdicion}
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                ✕ Cancelar
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                size="sm" 
+                variant="outline-primary"
+                onClick={() => setEditandoVale(vale.id)}
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                ✎ Editar
+              </Button>
+              {(rol === 'admin' || rol === 'anfitrion') && (
+                <Button 
+                  size="sm" 
+                  variant="outline-danger"
+                  onClick={() => handleEliminar(vale.id)}
+                  style={{ fontSize: '11px', padding: '4px 8px' }}
+                >
+                  🗑 Eliminar
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </Card.Body>
+    </Card>
+  );
+};
 
 // Componente separado para edición de celdas
 const CeldaEditableExterna = ({ esEditable, valorActual, onCambio, tipo = 'text', opciones = null }) => {
@@ -61,10 +1140,51 @@ function CuadreDiario() {
   const [filtros, setFiltros] = useState({ usuario: '', tipo: '', estado: '', local: '', formaPago: '' });
   const [usuarios, setUsuarios] = useState([]);
   const [nombresUsuarios, setNombresUsuarios] = useState({});
-  const { rol } = useAuth ? useAuth() : { rol: null };
+  const { rol } = useAuth();
   const [vista, setVista] = useState('cards'); // <-- Por Profesional es la vista por defecto
-  const [ordenColumna, setOrdenColumna] = useState('fecha');
+  const [modoVisualizacion, setModoVisualizacion] = useState('auto'); // auto, table, cards, list
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [elementosPorPagina] = useState(15); // Configurable
+  const [ordenColumna, _setOrdenColumna] = useState('fecha');
   const [ordenDireccion, setOrdenDireccion] = useState('desc');
+  
+  // Hook para detectar tamaño de pantalla con breakpoints mejorados
+  const [screenSize, setScreenSize] = useState({
+    width: window.innerWidth,
+    isMobile: window.innerWidth <= 768,
+    isTablet: window.innerWidth > 768 && window.innerWidth <= 1024,
+    isDesktop: window.innerWidth > 1024
+  });
+  
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setScreenSize({
+        width,
+        isMobile: width <= 768,
+        isTablet: width > 768 && width <= 1024,
+        isDesktop: width > 1024
+      });
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  const esMobile = screenSize.isMobile;
+  
+  // Determinar modo de visualización
+  const getModoVisualizacion = () => {
+    if (modoVisualizacion === 'auto') {
+      return esMobile ? 'list' : 'table'; // Lista compacta en móvil, tabla en desktop
+    }
+    return modoVisualizacion;
+  };
+  
+  const modoActual = getModoVisualizacion();
+  const mostrarTarjetas = modoActual === 'cards';
+  const mostrarLista = modoActual === 'list';
+  const mostrarTabla = modoActual === 'table';
   
   // Estados para edición inline
   const [editandoVale, setEditandoVale] = useState(null);
@@ -135,7 +1255,18 @@ function CuadreDiario() {
       }
     };
 
-    unsub1 = onSnapshot(collection(db, 'vales_servicio'), snap => {
+    // Query optimizado para vales de servicio con filtro de fecha
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - 90); // Últimos 90 días
+    
+    const qServicio = query(
+      collection(db, 'vales_servicio'),
+      where('fecha', '>=', fechaLimite),
+      orderBy('fecha', 'desc'),
+      limit(500)
+    );
+
+    unsub1 = onSnapshot(qServicio, snap => {
       valesServicio = [];
       snap.forEach(doc => {
         const data = doc.data();
@@ -150,7 +1281,15 @@ function CuadreDiario() {
       setLoading(false);
     });
 
-    unsub2 = onSnapshot(collection(db, 'vales_gasto'), snap => {
+    // Query optimizado para vales de gasto con filtro de fecha
+    const qGasto = query(
+      collection(db, 'vales_gasto'),
+      where('fecha', '>=', fechaLimite),
+      orderBy('fecha', 'desc'),
+      limit(500)
+    );
+
+    unsub2 = onSnapshot(qGasto, snap => {
       valesGasto = [];
       snap.forEach(doc => {
         const data = doc.data();
@@ -229,6 +1368,27 @@ function CuadreDiario() {
     setValoresEditados({});
   };
 
+  const handleCambioValor = (campo, valor) => {
+    setValoresEditados(prev => ({
+      ...prev,
+      [campo]: valor
+    }));
+  };
+
+  // Función para manejar paginación
+  const getPaginatedData = (data) => {
+    if (mostrarTabla) return data; // Las tablas no usan paginación
+    
+    const startIndex = (paginaActual - 1) * elementosPorPagina;
+    const endIndex = startIndex + elementosPorPagina;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const getTotalPaginas = (totalItems) => {
+    if (mostrarTabla) return 1;
+    return Math.ceil(totalItems / elementosPorPagina);
+  };
+
   const guardarEdicion = async (vale) => {
     if (guardando) return;
     
@@ -274,13 +1434,6 @@ function CuadreDiario() {
     } finally {
       setGuardando(false);
     }
-  };
-
-  const handleCambioValor = (campo, valor) => {
-    setValoresEditados(prev => ({
-      ...prev,
-      [campo]: valor
-    }));
   };
 
   // --- EXPORTAR PDF ---
@@ -390,7 +1543,6 @@ function CuadreDiario() {
 
     // 4. TABLA ÚNICA CON TODOS LOS VALES
     const rows = [];
-    let currentUser = '';
     
     valesOrdenados.forEach(v => {
       // Asegúrate de que v.fecha es un objeto Date
@@ -579,9 +1731,6 @@ function CuadreDiario() {
     .reduce((a, v) => a + getMontoPercibido(v), 0);
 
   // 3.1. PROPINAS TOTALES (comisiones extra que van 100% al profesional)
-  const totalPropinas = valesFiltrados
-    .filter(v => v.tipo === 'Ingreso' && v.estado === 'aprobado')
-    .reduce((a, v) => a + (Number(v.comisionExtra) || 0), 0);
 
   // 4. SOLICITUDES DE DINERO DE PROFESIONALES (egresos = adelantos/préstamos)
   const solicitudesProfesionales = valesFiltrados
@@ -618,17 +1767,37 @@ function CuadreDiario() {
   if (loading) return <Spinner animation="border" className="d-block mx-auto mt-5" />;
   if (error) return <Alert variant="danger">{error}</Alert>;
 
-  const handleOrdenar = (col) => {
-    if (ordenColumna === col) {
-      setOrdenDireccion(ordenDireccion === 'asc' ? 'desc' : 'asc');
-    } else {
-      setOrdenColumna(col);
-      setOrdenDireccion('asc');
-    }
-  };
-
   return (
-    <div className="cuadre-diario-container">
+    <>
+      {/* Estilos específicos para móvil */}
+      <style>{`
+        @media (max-width: 576px) {
+          .cuadre-diario-container .table-responsive {
+            font-size: 10px !important;
+          }
+          .cuadre-diario-container .table th,
+          .cuadre-diario-container .table td {
+            padding: 3px 2px !important;
+            vertical-align: middle;
+          }
+          .cuadre-diario-container .badge {
+            font-size: 7px !important;
+            padding: 1px 3px !important;
+          }
+          .cuadre-diario-container .btn-sm {
+            font-size: 12px !important;
+            padding: 6px 8px !important;
+            min-width: 36px !important;
+            min-height: 32px !important;
+          }
+        }
+        @media (max-width: 768px) {
+          .cuadre-diario-container .table {
+            font-size: 11px !important;
+          }
+        }
+      `}</style>
+      <div className="cuadre-diario-container">
       <Row className="justify-content-center mt-4">
         <Col xs={12} md={12} lg={12} xl={12} style={{paddingLeft: 8, paddingRight: 8, maxWidth: "100%"}}>
           <Card className="shadow-sm border-0" style={{ 
@@ -1197,6 +2366,75 @@ function CuadreDiario() {
                         <i className="bi bi-table me-1"></i>Vista General
                       </ToggleButton>
                     </ToggleButtonGroup>
+                    
+                    {/* Selector de modo de visualización */}
+                    <ToggleButtonGroup type="radio" name="modoVisualizacion" value={modoVisualizacion} onChange={(value) => { setModoVisualizacion(value); setPaginaActual(1); }}>
+                      <ToggleButton 
+                        id="modo-auto" 
+                        value="auto" 
+                        variant="outline-info"
+                        style={{ 
+                          borderRadius: '12px 0 0 0',
+                          fontWeight: 600,
+                          fontSize: '11px',
+                          padding: '6px 10px'
+                        }}
+                      >
+                        <i className="bi bi-phone me-1"></i>Auto
+                      </ToggleButton>
+                      <ToggleButton 
+                        id="modo-table" 
+                        value="table" 
+                        variant="outline-info"
+                        style={{ 
+                          borderRadius: '0',
+                          fontWeight: 600,
+                          fontSize: '11px',
+                          padding: '6px 10px'
+                        }}
+                      >
+                        <i className="bi bi-table me-1"></i>Tabla
+                      </ToggleButton>
+                      <ToggleButton 
+                        id="modo-list" 
+                        value="list" 
+                        variant="outline-info"
+                        style={{ 
+                          borderRadius: '0',
+                          fontWeight: 600,
+                          fontSize: '11px',
+                          padding: '6px 10px'
+                        }}
+                      >
+                        <i className="bi bi-list-ul me-1"></i>Lista
+                        {valesFiltrados.length > 25 && (
+                          <span style={{ 
+                            fontSize: '7px', 
+                            background: '#22c55e', 
+                            color: 'white', 
+                            borderRadius: 2, 
+                            padding: '1px 3px', 
+                            marginLeft: 2 
+                          }}>
+                            REC
+                          </span>
+                        )}
+                      </ToggleButton>
+                      <ToggleButton 
+                        id="modo-cards" 
+                        value="cards" 
+                        variant="outline-info"
+                        style={{ 
+                          borderRadius: '0 0 12px 12px',
+                          fontWeight: 600,
+                          fontSize: '11px',
+                          padding: '6px 10px'
+                        }}
+                      >
+                        <i className="bi bi-card-list me-1"></i>Tarjetas
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                    
                     <Button 
                       variant="success" 
                       size="sm" 
@@ -1263,6 +2501,17 @@ function CuadreDiario() {
                             </h4>
                             <div style={{ fontSize: 14, opacity: 0.8 }}>
                               {valesFiltrados.length} transacciones en el período
+                              {!mostrarTabla && valesFiltrados.length > 15 && (
+                                <span style={{ 
+                                  marginLeft: 8, 
+                                  padding: '2px 6px', 
+                                  background: 'rgba(255,255,255,0.2)', 
+                                  borderRadius: 4, 
+                                  fontSize: 11 
+                                }}>
+                                  📄 Paginado
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div style={{ 
@@ -1343,25 +2592,133 @@ function CuadreDiario() {
                         </div>
                       )}
 
-                      {/* Tabla con diseño moderno */}
+                      {/* Contenido según modo de visualización */}
                       <div style={{
-                        overflowX: 'auto', 
-                        width: '100%', 
                         background: "#fff", 
                         borderRadius: '0 0 20px 20px',
-                        padding: '12px'
+                        padding: (mostrarTarjetas || mostrarLista) ? '16px' : '8px',
+                        position: 'relative'
                       }}>
+                        {mostrarLista ? (
+                          // Vista de lista compacta (ideal para alto volumen)
+                          <div>
+                            {(() => {
+                              const valesOrdenados = valesFiltrados.sort((a, b) => b.fecha - a.fecha);
+                              const valesPaginados = getPaginatedData(valesOrdenados);
+                              
+                              return (
+                                <>
+                                  {valesPaginados.map(vale => (
+                                    <ListaCompactaVale
+                                      key={vale.id}
+                                      vale={vale}
+                                      editandoVale={editandoVale}
+                                      valoresEditados={valoresEditados}
+                                      handleCambioValor={handleCambioValor}
+                                      nombresUsuarios={nombresUsuarios}
+                                      guardarEdicion={guardarEdicion}
+                                      cancelarEdicion={cancelarEdicion}
+                                      setEditandoVale={setEditandoVale}
+                                      handleEliminar={handleEliminar}
+                                      rol={rol}
+                                    />
+                                  ))}
+                                  
+                                  <PaginacionComponente
+                                    paginaActual={paginaActual}
+                                    totalPaginas={getTotalPaginas(valesOrdenados.length)}
+                                    totalItems={valesOrdenados.length}
+                                    onCambioPagina={setPaginaActual}
+                                    elementosPorPagina={elementosPorPagina}
+                                  />
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ) : mostrarTarjetas ? (
+                          // Vista de tarjetas completas (para casos específicos)
+                          <div>
+                            {(() => {
+                              const valesOrdenados = valesFiltrados.sort((a, b) => b.fecha - a.fecha);
+                              const valesPaginados = getPaginatedData(valesOrdenados);
+                              
+                              return (
+                                <>
+                                  {valesPaginados.map(vale => (
+                                    screenSize.isMobile ? (
+                                      <TarjetaVale
+                                        key={vale.id}
+                                        vale={vale}
+                                        editandoVale={editandoVale}
+                                        valoresEditados={valoresEditados}
+                                        handleCambioValor={handleCambioValor}
+                                        nombresUsuarios={nombresUsuarios}
+                                        guardarEdicion={guardarEdicion}
+                                        cancelarEdicion={cancelarEdicion}
+                                        setEditandoVale={setEditandoVale}
+                                        handleEliminar={handleEliminar}
+                                        rol={rol}
+                                      />
+                                    ) : (
+                                      <TarjetaValeDesktop
+                                        key={vale.id}
+                                        vale={vale}
+                                        editandoVale={editandoVale}
+                                        valoresEditados={valoresEditados}
+                                        handleCambioValor={handleCambioValor}
+                                        nombresUsuarios={nombresUsuarios}
+                                        guardarEdicion={guardarEdicion}
+                                        cancelarEdicion={cancelarEdicion}
+                                        setEditandoVale={setEditandoVale}
+                                        handleEliminar={handleEliminar}
+                                        rol={rol}
+                                        screenSize={screenSize}
+                                      />
+                                    )
+                                  ))}
+                                  
+                                  <PaginacionComponente
+                                    paginaActual={paginaActual}
+                                    totalPaginas={getTotalPaginas(valesOrdenados.length)}
+                                    totalItems={valesOrdenados.length}
+                                    onCambioPagina={setPaginaActual}
+                                    elementosPorPagina={elementosPorPagina}
+                                  />
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          // Vista de tabla tradicional
+                          <div style={{
+                            overflowX: 'auto',
+                            width: '100%'
+                          }}>
+                            {/* Indicador de scroll en móvil */}
+                            <div className="d-md-none" style={{
+                              position: 'absolute',
+                              top: '12px',
+                              right: '16px',
+                              background: 'rgba(99, 102, 241, 0.9)',
+                              color: 'white',
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              zIndex: 10,
+                              fontWeight: 600
+                            }}>
+                              ← Desliza →
+                            </div>
                     <Table
                       striped
-                      bordered
                       hover
                       size="sm"
                       className="mb-0"
                       style={{
-                        fontSize: '13px',
-                        minWidth: '320px', // Reducido para móvil
+                        fontSize: '12px',
+                        minWidth: '800px', // Forzar ancho mínimo para scroll horizontal
                         background: "#fff",
-                        borderRadius: 12,
+                        borderRadius: 8,
                         overflow: 'hidden',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                       }}
@@ -1371,53 +2728,58 @@ function CuadreDiario() {
                         color: 'white'
                       }}>
     <tr>
-      {/* Código - Oculto en móvil */}
-      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Código</th>
+      {/* Código - Siempre visible con scroll */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Código</th>
       
       {/* Profesional - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Profesional</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', minWidth: '100px'}}>        Profesional
+      </th>
       
-      {/* Fecha - Oculto en móvil */}
-      <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Fecha</th>
+      {/* Fecha - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Fecha</th>
       
-      {/* Hora - Oculto en móvil */}
-      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Hora</th>
+      {/* Hora - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '50px'}}>Hora</th>
       
       {/* Tipo - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Tipo</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Tipo</th>
       
       {/* Servicio/Concepto - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Servicio</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', minWidth: '120px'}}>
+        Servicio
+      </th>
       
-      {/* Forma de Pago - Oculto en móvil */}
-      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Pago</th>
+      {/* Forma de Pago - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Pago</th>
       
-      {/* Local - Oculto en móvil */}
-      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Local</th>
+      {/* Local - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Local</th>
       
       {/* Monto - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Monto</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>Monto</th>
       
-      {/* % Prof. - Oculto en móvil */}
-      <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>%</th>
+      {/* % Prof. - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '50px'}}>%</th>
       
-      {/* Monto Percibido - Oculto en móvil */}
-      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Percibido</th>
+      {/* Monto Percibido - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>Percibido</th>
       
       {/* Estado - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Estado</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Estado</th>
       
-      {/* Aprobado por - Oculto en móvil */}
-      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Aprobado</th>
+      {/* Aprobado por - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>Aprobado</th>
       
-      {/* Observación - Oculto en móvil */}
-      <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Observación</th>
+      {/* Observación - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '100px'}}>Observación</th>
       
-      {/* Comisión Extra - Oculto en móvil */}
-      <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Comisión</th>
+      {/* Comisión Extra - Siempre visible */}
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Comisión</th>
       
       {/* Acciones - Siempre visible */}
-      <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Acciones</th>
+      <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '90px'}}>
+        Acciones
+      </th>
     </tr>
   </thead>
                       <tbody>
@@ -1479,38 +2841,32 @@ function CuadreDiario() {
                                 transition: 'all 0.2s ease'
                               }}
                             >
-                              <td className="d-none d-md-table-cell" style={{padding: '6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '11px'}}>
+                              <td style={{padding: '4px 2px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '10px'}}>
                                 {vale.codigo || '-'}
                               </td>
-                              <td style={{padding: '6px', fontWeight: 600, color: '#2563eb', fontSize: '11px', maxWidth: '120px'}}>
+                              <td style={{padding: '4px 2px', fontWeight: 600, color: '#2563eb', fontSize: '10px', maxWidth: '100px'}}>
                                 <div style={{ 
                                   whiteSpace: 'nowrap', 
                                   overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
+                                  textOverflow: 'ellipsis',
+                                  lineHeight: '1.2'
                                 }}>
                                   {vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido'}
                                 </div>
-                                {/* En móvil, mostrar información adicional */}
-                                <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                                  {vale.fecha.toLocaleDateString()} - {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                                <div className="d-lg-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                                  {vale.formaPago && `${vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1)}`}
-                                  {vale.local && ` • ${vale.local}`}
-                                </div>
                               </td>
-                              <td className="d-none d-sm-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleDateString()}</td>
-                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                              <td style={{padding: '6px'}}>
-                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '9px'}}>
+                              <td style={{padding: '4px 2px', fontSize: '10px'}}>{vale.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}</td>
+                              <td style={{padding: '4px 2px', fontSize: '10px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td style={{padding: '4px 2px'}}>
+                                <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '8px', padding: '2px 4px'}}>
                                   {vale.tipo === 'Ingreso' ? 'ING' : 'EGR'}
                                 </span>
                               </td>
-                              <td style={{padding: '6px', fontWeight: 600, color: '#374151', fontSize: '11px', maxWidth: '150px'}}>
+                              <td style={{padding: '4px 2px', fontWeight: 600, color: '#374151', fontSize: '10px', maxWidth: '120px'}}>
                                 <div style={{ 
                                   whiteSpace: 'nowrap', 
                                   overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
+                                  textOverflow: 'ellipsis',
+                                  lineHeight: '1.2'
                                 }}>
                                   <CeldaEditableExterna
                                     esEditable={editandoVale === vale.id}
@@ -1563,7 +2919,7 @@ function CuadreDiario() {
                                   )}
                                 </div>
                               </td>
-                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                              <td  style={{padding: '4px 2px', fontSize: '10px'}}>
                                 <CeldaEditableExterna
                                   esEditable={editandoVale === vale.id}
                                   valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : (vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '')}
@@ -1575,7 +2931,7 @@ function CuadreDiario() {
                                   ]}
                                 />
                               </td>
-                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                              <td  style={{padding: '4px 2px', fontSize: '10px'}}>
                                 <CeldaEditableExterna
                                   esEditable={editandoVale === vale.id}
                                   valorActual={valoresEditados.local !== undefined ? valoresEditados.local : (vale.local || '-')}
@@ -1587,14 +2943,15 @@ function CuadreDiario() {
                                 />
                               </td>
                               <td style={{
-                                padding: '6px',
+                                padding: '4px 2px',
                                 color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545',
                                 fontWeight: 700,
-                                fontSize: '12px'
+                                fontSize: '10px',
+                                textAlign: 'right'
                               }}>
                                 {editandoVale === vale.id ? (
-                                  <div className="d-flex align-items-center">
-                                    <span style={{marginRight: 4, fontSize: '10px'}}>{vale.tipo === 'Ingreso' ? '+' : '-'}$</span>
+                                  <div className="d-flex align-items-center justify-content-end" style={{ gap: '2px' }}>
+                                    <span style={{fontSize: '9px'}}>{vale.tipo === 'Ingreso' ? '+' : '-'}$</span>
                                     <CeldaEditableExterna
                                       esEditable={true}
                                       valorActual={valoresEditados.valor !== undefined ? valoresEditados.valor : (vale.valor || 0)}
@@ -1603,7 +2960,9 @@ function CuadreDiario() {
                                     />
                                   </div>
                                 ) : (
-                                  `${vale.tipo === 'Ingreso' ? '+' : '-'}$${Number(vale.valor || 0).toLocaleString()}`
+                                  <div style={{ whiteSpace: 'nowrap' }}>
+                                    {`${vale.tipo === 'Ingreso' ? '+' : '-'}$${Number(vale.valor || 0).toLocaleString()}`}
+                                  </div>
                                 )}
                                 {/* En móvil, mostrar monto percibido debajo */}
                                 <div className="d-md-none" style={{ fontSize: '10px', color: '#6366f1', marginTop: '2px', fontWeight: 600 }}>
@@ -1612,7 +2971,7 @@ function CuadreDiario() {
                                   )}
                                 </div>
                               </td>
-                              <td className="d-none d-sm-table-cell" style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
+                              <td  style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
                                 {vale.tipo === 'Ingreso' ? (
                                   editandoVale === vale.id ? (
                                     <div className="d-flex align-items-center justify-content-center">
@@ -1643,12 +3002,12 @@ function CuadreDiario() {
                                   )
                                 ) : '-'}
                               </td>
-                              <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+                              <td  style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
                                 {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
                                   ? `$${getMontoPercibido(vale).toLocaleString()}`
                                   : '-'}
                               </td>
-                              <td style={{padding: '6px'}}>
+                              <td style={{padding: '4px 2px'}}>
                                 <span className={`badge ${
                                   vale.estado === 'aprobado'
                                     ? 'bg-success'
@@ -1667,7 +3026,7 @@ function CuadreDiario() {
                                   {vale.observacion && vale.observacion !== '-' && vale.observacion}
                                 </div>
                               </td>
-                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                              <td  style={{padding: '4px 2px', fontSize: '10px'}}>
                                 {vale.estado === 'aprobado' && vale.aprobadoPor ? (
                                   <span style={{ color: '#22c55e', fontWeight: 700 }}>
                                     <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
@@ -1682,14 +3041,14 @@ function CuadreDiario() {
                                   <span className="text-secondary">-</span>
                                 )}
                               </td>
-                              <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+                              <td  style={{padding: '4px 2px', fontSize: '10px'}}>
                                 <CeldaEditableExterna
                                   esEditable={editandoVale === vale.id}
                                   valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '-')}
                                   onCambio={valor => handleCambioValor('observacion', valor)}
                                 />
                               </td>
-                              <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+                              <td  style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
                                 {vale.tipo === 'Ingreso' ? (
                                   editandoVale === vale.id ? (
                                     <div className="d-flex align-items-center">
@@ -1706,8 +3065,8 @@ function CuadreDiario() {
                                   )
                                 ) : '-'}
                               </td>
-                              <td style={{padding: '6px'}}>
-                                  <div className="d-flex gap-1 flex-wrap">
+                              <td style={{padding: '4px 2px', minWidth: '90px'}}>
+                                  <div className="d-flex gap-1 flex-wrap justify-content-center">
                                     {editandoVale === vale.id ? (
                                       <>
                                         <Button
@@ -1716,12 +3075,17 @@ function CuadreDiario() {
                                           onClick={() => guardarEdicion(vale)}
                                           disabled={guardando}
                                           title="Guardar cambios"
-                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                          style={{
+                                            borderRadius: 6, 
+                                            padding: '6px 8px',
+                                            minWidth: '36px',
+                                            minHeight: '32px'
+                                          }}
                                         >
                                           {guardando ? (
                                             <Spinner as="span" animation="border" size="sm" />
                                           ) : (
-                                            <i className="bi bi-check" style={{fontSize: '12px'}}></i>
+                                            <i className="bi bi-check" style={{fontSize: '14px'}}></i>
                                           )}
                                         </Button>
                                         <Button
@@ -1730,9 +3094,14 @@ function CuadreDiario() {
                                           onClick={cancelarEdicion}
                                           disabled={guardando}
                                           title="Cancelar"
-                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                          style={{
+                                            borderRadius: 6, 
+                                            padding: '6px 8px',
+                                            minWidth: '36px',
+                                            minHeight: '32px'
+                                          }}
                                         >
-                                          <i className="bi bi-x" style={{fontSize: '12px'}}></i>
+                                          <i className="bi bi-x" style={{fontSize: '14px'}}></i>
                                         </Button>
                                       </>
                                     ) : (
@@ -1742,18 +3111,28 @@ function CuadreDiario() {
                                           size="sm"
                                           onClick={() => iniciarEdicion(vale)}
                                           title="Editar"
-                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                          style={{
+                                            borderRadius: 6, 
+                                            padding: '6px 8px',
+                                            minWidth: '36px',
+                                            minHeight: '32px'
+                                          }}
                                         >
-                                          <i className="bi bi-pencil" style={{fontSize: '12px'}}></i>
+                                          <i className="bi bi-pencil" style={{fontSize: '14px'}}></i>
                                         </Button>
                                         <Button
                                           variant="danger"
                                           size="sm"
                                           onClick={() => handleEliminar(vale)}
                                           title="Eliminar"
-                                          style={{borderRadius: 8, padding: '4px 8px'}}
+                                          style={{
+                                            borderRadius: 6, 
+                                            padding: '6px 8px',
+                                            minWidth: '36px',
+                                            minHeight: '32px'
+                                          }}
                                         >
-                                          <i className="bi bi-trash" style={{fontSize: '12px'}}></i>
+                                          <i className="bi bi-trash" style={{fontSize: '14px'}}></i>
                                         </Button>
                                       </>
                                     )}
@@ -1763,6 +3142,8 @@ function CuadreDiario() {
                           ))}
                       </tbody>
                     </Table>
+                          </div>
+                        )}
                       </div>
                     </Card.Body>
                   </Card>
@@ -1949,23 +3330,115 @@ function CuadreDiario() {
                                   {lista.length} registros
                                 </span>
                               </div>
-                              <div style={{
-                                overflowX: 'auto',
-                                background: '#f8fafc',
-                                borderRadius: 12,
-                                border: '1px solid #e2e8f0',
-                                padding: 8
-                              }}>
+                              {mostrarLista ? (
+                                // Vista de lista compacta (ideal para alto volumen)
+                                <div style={{ padding: '8px' }}>
+                                  {(() => {
+                                    const valesOrdenados = lista.sort((a, b) => b.fecha - a.fecha);
+                                    const valesPaginados = getPaginatedData(valesOrdenados);
+                                    
+                                    return (
+                                      <>
+                                        {valesPaginados.map(vale => (
+                                          <ListaCompactaVale
+                                            key={vale.id}
+                                            vale={vale}
+                                            editandoVale={editandoVale}
+                                            valoresEditados={valoresEditados}
+                                            handleCambioValor={handleCambioValor}
+                                            nombresUsuarios={nombresUsuarios}
+                                            guardarEdicion={guardarEdicion}
+                                            cancelarEdicion={cancelarEdicion}
+                                            setEditandoVale={setEditandoVale}
+                                            handleEliminar={handleEliminar}
+                                            rol={rol}
+                                          />
+                                        ))}
+                                        
+                                        <PaginacionComponente
+                                          paginaActual={paginaActual}
+                                          totalPaginas={getTotalPaginas(valesOrdenados.length)}
+                                          totalItems={valesOrdenados.length}
+                                          onCambioPagina={setPaginaActual}
+                                          elementosPorPagina={elementosPorPagina}
+                                        />
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              ) : mostrarTarjetas ? (
+                                // Vista de tarjetas completas (para casos específicos)
+                                <div style={{ padding: '8px' }}>
+                                  {(() => {
+                                    const valesOrdenados = lista.sort((a, b) => b.fecha - a.fecha);
+                                    const valesPaginados = getPaginatedData(valesOrdenados);
+                                    
+                                    return (
+                                      <>
+                                        {valesPaginados.map(vale => (
+                                          screenSize.isMobile ? (
+                                            <TarjetaVale
+                                              key={vale.id}
+                                              vale={vale}
+                                              editandoVale={editandoVale}
+                                              valoresEditados={valoresEditados}
+                                              handleCambioValor={handleCambioValor}
+                                              nombresUsuarios={nombresUsuarios}
+                                              guardarEdicion={guardarEdicion}
+                                              cancelarEdicion={cancelarEdicion}
+                                              setEditandoVale={setEditandoVale}
+                                              handleEliminar={handleEliminar}
+                                              rol={rol}
+                                            />
+                                          ) : (
+                                            <TarjetaValeDesktop
+                                              key={vale.id}
+                                              vale={vale}
+                                              editandoVale={editandoVale}
+                                              valoresEditados={valoresEditados}
+                                              handleCambioValor={handleCambioValor}
+                                              nombresUsuarios={nombresUsuarios}
+                                              guardarEdicion={guardarEdicion}
+                                              cancelarEdicion={cancelarEdicion}
+                                              setEditandoVale={setEditandoVale}
+                                              handleEliminar={handleEliminar}
+                                              rol={rol}
+                                              screenSize={screenSize}
+                                            />
+                                          )
+                                        ))}
+                                        
+                                        <PaginacionComponente
+                                          paginaActual={paginaActual}
+                                          totalPaginas={getTotalPaginas(valesOrdenados.length)}
+                                          totalItems={valesOrdenados.length}
+                                          onCambioPagina={setPaginaActual}
+                                          elementosPorPagina={elementosPorPagina}
+                                        />
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              ) : (
+                                // Vista de tabla tradicional
+                                <div style={{
+                                  overflowX: 'auto',
+                                  width: '100%',
+                                  background: '#f8fafc',
+                                  borderRadius: 12,
+                                  border: '1px solid #e2e8f0',
+                                  padding: '8px'
+                                }}>
                               <Table
                                 striped
                                 hover
                                 size="sm"
                                 className="mb-0"
                                 style={{
-                                  fontSize: '13px',
-                                  minWidth: '320px', // Reducido para móvil
+                                  fontSize: '12px',
+                                  minWidth: '800px', // Forzar ancho mínimo para scroll horizontal
                                   background: "#fff",
-                                  borderRadius: 12,
+                                  borderRadius: 8,
                                   overflow: 'hidden',
                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                                 }}
@@ -1976,52 +3449,58 @@ function CuadreDiario() {
                                 }}>
   <tr>
     {/* Código - Oculto en móvil */}
-    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Código</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Código</th>
     
     {/* Profesional - Oculto en vista profesional ya que está en el header */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Profesional</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', minWidth: '80px'}}>Profesional</th>
     
     {/* Fecha - Oculto en móvil */}
-    <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Fecha</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Fecha</th>
     
     {/* Hora - Oculto en móvil */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Hora</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '50px'}}>Hora</th>
     
     {/* Tipo - Siempre visible */}
-    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Tipo</th>
+    <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Tipo</th>
     
-    {/* Servicio/Concepto - Siempre visible */}
-    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Servicio</th>
+    {/* Servicio/Concepto - Más compacto */}
+    <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', minWidth: '100px'}}>
+      <span className="d-none d-md-inline">Servicio</span>
+      <span className="d-md-none">Serv.</span>
+    </th>
     
     {/* Forma de Pago - Oculto en móvil */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Pago</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Pago</th>
     
     {/* Local - Oculto en móvil */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Local</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '60px'}}>Local</th>
     
     {/* Monto - Siempre visible */}
-    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Monto</th>
+    <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>Monto</th>
     
     {/* % Prof. - Oculto en móvil */}
-    <th className="d-none d-sm-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>%</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '50px'}}>%</th>
     
     {/* Monto Percibido - Oculto en móvil */}
-    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Percibido</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Percibido</th>
     
     {/* Estado - Siempre visible */}
-    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Estado</th>
+    <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Estado</th>
     
     {/* Aprobado por - Oculto en móvil */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Aprobado</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>Aprobado</th>
     
     {/* Observación - Oculto en móvil */}
-    <th className="d-none d-lg-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Observación</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '100px'}}>Observación</th>
     
     {/* Comisión Extra - Oculto en móvil */}
-    <th className="d-none d-md-table-cell" style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Comisión</th>
+    <th  style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '70px'}}>Comisión</th>
     
     {/* Acciones - Siempre visible */}
-    <th style={{padding: '8px 6px', fontWeight: 600, fontSize: 11, borderBottom: 'none'}}>Acciones</th>
+    <th style={{padding: '6px 4px', fontWeight: 600, fontSize: 10, borderBottom: 'none', width: '80px'}}>
+      <span className="d-none d-sm-inline">Acciones</span>
+      <span className="d-sm-none">Act.</span>
+    </th>
   </tr>
 </thead>
                                 <tbody>
@@ -2053,7 +3532,7 @@ function CuadreDiario() {
           transition: 'all 0.2s ease'
         }}
       >
-        <td className="d-none d-md-table-cell" style={{padding: '6px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontWeight: 700, color: vale.tipo === 'Ingreso' ? '#22c55e' : '#dc3545', background: '#f8fafc', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
             valorActual={valoresEditados.codigo !== undefined ? valoresEditados.codigo : (vale.codigo || '-')}
@@ -2061,7 +3540,7 @@ function CuadreDiario() {
             tipo="text"
           />
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontWeight: 600, color: '#2563eb', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontWeight: 600, color: '#2563eb', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
             valorActual={valoresEditados.peluquero !== undefined ? valoresEditados.peluquero : (vale.peluquero || nombresUsuarios[vale.peluqueroEmail] || vale.peluqueroEmail || 'Desconocido')}
@@ -2069,16 +3548,16 @@ function CuadreDiario() {
             tipo="text"
           />
         </td>
-        <td className="d-none d-sm-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
-            valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString()}
+            valorActual={valoresEditados.fecha !== undefined ? valoresEditados.fecha : vale.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
             onCambio={valor => handleCambioValor('fecha', valor)}
             tipo="date"
           />
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-        <td style={{padding: '6px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>{vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        <td style={{padding: '4px 2px'}}>
           {editandoVale === vale.id ? (
             <CeldaEditableExterna
               esEditable={true}
@@ -2090,20 +3569,21 @@ function CuadreDiario() {
               ]}
             />
           ) : (
-            <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '9px'}}>
+            <span className={`badge ${vale.tipo === 'Ingreso' ? 'bg-success' : 'bg-danger'}`} style={{fontSize: '8px', padding: '2px 4px'}}>
               {vale.tipo === 'Ingreso' ? 'ING' : 'EGR'}
             </span>
           )}
           {/* En móvil, mostrar información adicional */}
-          <div className="d-sm-none" style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-            {vale.fecha.toLocaleDateString()} - {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          <div className="d-sm-none" style={{ fontSize: '9px', color: '#64748b', marginTop: '1px', lineHeight: '1.1' }}>
+            {vale.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} - {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </td>
-        <td style={{padding: '6px', fontWeight: 600, color: '#374151', fontSize: '11px', maxWidth: '150px'}}>
+        <td style={{padding: '4px 2px', fontWeight: 600, color: '#374151', fontSize: '10px', maxWidth: '120px'}}>
           <div style={{ 
             whiteSpace: 'nowrap', 
             overflow: 'hidden', 
-            textOverflow: 'ellipsis' 
+            textOverflow: 'ellipsis',
+            lineHeight: '1.2'
           }}>
             <CeldaEditableExterna
               esEditable={editandoVale === vale.id}
@@ -2161,7 +3641,7 @@ function CuadreDiario() {
             )}
           </div>
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
             valorActual={valoresEditados.formaPago !== undefined ? valoresEditados.formaPago : (vale.formaPago ? vale.formaPago.charAt(0).toUpperCase() + vale.formaPago.slice(1) : '-')}
@@ -2173,7 +3653,7 @@ function CuadreDiario() {
             ]}
           />
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
             valorActual={valoresEditados.local !== undefined ? valoresEditados.local : (vale.local || '-')}
@@ -2210,7 +3690,7 @@ function CuadreDiario() {
             )}
           </div>
         </td>
-        <td className="d-none d-sm-table-cell" style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
+        <td  style={{padding: '6px', color: '#7c3aed', fontWeight: 600, textAlign: 'center', fontSize: '11px'}}>
           {vale.tipo === 'Ingreso' ? (
             editandoVale === vale.id ? (
               <div className="d-flex align-items-center justify-content-center">
@@ -2241,12 +3721,12 @@ function CuadreDiario() {
             )
           ) : '-'}
         </td>
-        <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+        <td  style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
           {vale.tipo === 'Ingreso' && vale.estado === 'aprobado'
             ? `$${getMontoPercibido(vale).toLocaleString()}`
             : '-'}
         </td>
-        <td style={{padding: '6px'}}>
+        <td style={{padding: '4px 2px'}}>
           {editandoVale === vale.id ? (
             <CeldaEditableExterna
               esEditable={true}
@@ -2278,7 +3758,7 @@ function CuadreDiario() {
             {vale.observacion && vale.observacion !== '-' && vale.observacion}
           </div>
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>
           {vale.estado === 'aprobado' && vale.aprobadoPor ? (
             <span style={{ color: '#22c55e', fontWeight: 700 }}>
               <i className="bi bi-check-circle" style={{marginRight: 4}}></i>
@@ -2293,7 +3773,7 @@ function CuadreDiario() {
             <span className="text-secondary">-</span>
           )}
         </td>
-        <td className="d-none d-lg-table-cell" style={{padding: '6px', fontSize: '11px'}}>
+        <td  style={{padding: '4px 2px', fontSize: '10px'}}>
           <CeldaEditableExterna
             esEditable={editandoVale === vale.id}
             valorActual={valoresEditados.observacion !== undefined ? valoresEditados.observacion : (vale.observacion || '-')}
@@ -2301,7 +3781,7 @@ function CuadreDiario() {
             tipo="text"
           />
         </td>
-        <td className="d-none d-md-table-cell" style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
+        <td  style={{padding: '6px', color: '#6366f1', fontWeight: 700, fontSize: '11px'}}>
           {vale.tipo === 'Ingreso' ? (
             editandoVale === vale.id ? (
               <div className="d-flex align-items-center">
@@ -2318,8 +3798,8 @@ function CuadreDiario() {
             )
           ) : '-'}
         </td>
-        <td style={{padding: '6px'}}>
-          <div className="d-flex gap-1 flex-wrap">
+        <td style={{padding: '4px 2px', minWidth: '90px'}}>
+          <div className="d-flex gap-1 flex-wrap justify-content-center">
             {editandoVale === vale.id ? (
               <>
                 <Button
@@ -2328,12 +3808,17 @@ function CuadreDiario() {
                   onClick={() => guardarEdicion(vale)}
                   disabled={guardando}
                   title="Guardar cambios"
-                  style={{borderRadius: 8, padding: '4px 8px'}}
+                  style={{
+                    borderRadius: 6, 
+                    padding: '6px 8px',
+                    minWidth: '36px',
+                    minHeight: '32px'
+                  }}
                 >
                   {guardando ? (
                     <Spinner as="span" animation="border" size="sm" />
                   ) : (
-                    <i className="bi bi-check" style={{fontSize: '12px'}}></i>
+                    <i className="bi bi-check" style={{fontSize: '14px'}}></i>
                   )}
                 </Button>
                 <Button
@@ -2342,9 +3827,14 @@ function CuadreDiario() {
                   onClick={cancelarEdicion}
                   disabled={guardando}
                   title="Cancelar"
-                  style={{borderRadius: 8, padding: '4px 8px'}}
+                  style={{
+                    borderRadius: 6, 
+                    padding: '6px 8px',
+                    minWidth: '36px',
+                    minHeight: '32px'
+                  }}
                 >
-                  <i className="bi bi-x" style={{fontSize: '12px'}}></i>
+                  <i className="bi bi-x" style={{fontSize: '14px'}}></i>
                 </Button>
               </>
             ) : (
@@ -2354,18 +3844,28 @@ function CuadreDiario() {
                   size="sm"
                   onClick={() => iniciarEdicion(vale)}
                   title="Editar"
-                  style={{borderRadius: 8, padding: '4px 8px'}}
+                  style={{
+                    borderRadius: 6, 
+                    padding: '6px 8px',
+                    minWidth: '36px',
+                    minHeight: '32px'
+                  }}
                 >
-                  <i className="bi bi-pencil" style={{fontSize: '12px'}}></i>
+                  <i className="bi bi-pencil" style={{fontSize: '14px'}}></i>
                 </Button>
                 <Button
                   variant="danger"
                   size="sm"
                   onClick={() => handleEliminar(vale)}
                   title="Eliminar"
-                  style={{borderRadius: 8, padding: '4px 8px'}}
+                  style={{
+                    borderRadius: 6, 
+                    padding: '6px 8px',
+                    minWidth: '36px',
+                    minHeight: '32px'
+                  }}
                 >
-                  <i className="bi bi-trash" style={{fontSize: '12px'}}></i>
+                  <i className="bi bi-trash" style={{fontSize: '14px'}}></i>
                 </Button>
               </>
             )}
@@ -2375,7 +3875,8 @@ function CuadreDiario() {
     ))}
                                 </tbody>
                               </Table>
-                            </div>
+                                </div>
+                              )}
                             </div>
                           </Card.Body>
                         </Card>
@@ -2388,7 +3889,8 @@ function CuadreDiario() {
           </Card>
         </Col>
       </Row>
-    </div>
+      </div>
+    </>
   );
 }
 

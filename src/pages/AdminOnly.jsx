@@ -1,5 +1,5 @@
 // AdminOnly.jsx
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 function AdminOnly({ children }) {
   const { rol, loading } = useAuth();

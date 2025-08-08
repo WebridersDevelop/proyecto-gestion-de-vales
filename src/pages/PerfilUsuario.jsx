@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Card, Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
@@ -15,9 +15,9 @@ function PerfilUsuario() {
     if (user?.uid) {
       cargarDatosUsuario();
     }
-  }, [user]);
+  }, [user, cargarDatosUsuario]);
 
-  const cargarDatosUsuario = async () => {
+  const cargarDatosUsuario = useCallback(async () => {
     try {
       const docRef = doc(db, 'usuarios', user.uid);
       const docSnap = await getDoc(docRef);
@@ -29,7 +29,7 @@ function PerfilUsuario() {
     } catch (error) {
       console.error('Error al cargar datos:', error);
     }
-  };
+  }, [user]);
 
   const actualizarNombre = async (e) => {
     e.preventDefault();

@@ -1,7 +1,7 @@
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { Card, Row, Col, Spinner, Alert, Badge, Form, Button } from 'react-bootstrap';
 import { Bar, Pie, Line, Doughnut } from 'react-chartjs-2';
 import { Chart, BarElement, ArcElement, CategoryScale, LinearScale, Tooltip, Legend, LineElement, PointElement, Filler } from 'chart.js';
@@ -14,7 +14,6 @@ function Dashboard() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [error, setError] = useState('');
   const [filtroFecha, setFiltroFecha] = useState('7'); // 7 días por defecto
-  const [usuarios, setUsuarios] = useState({});
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState('predefinido'); // 'predefinido' o 'personalizado'
@@ -32,25 +31,13 @@ function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Obtener usuarios para nombres
-        const usuariosSnap = await getDocs(collection(db, 'usuarios'));
-        const usuariosMap = {};
-        usuariosSnap.forEach(doc => {
-          const data = doc.data();
-          usuariosMap[data.email] = data.nombre || data.email;
-        });
-        setUsuarios(usuariosMap);
-
-        const valesServicioSnap = await getDocs(collection(db, 'vales_servicio'));
-        const valesGastoSnap = await getDocs(collection(db, 'vales_gasto'));
-
-        // Calcular fechas límite
+        // Calcular fechas límite primero para usar en queries
         let fechaLimiteInicio, fechaLimiteFin;
         
         if (tipoFiltro === 'personalizado' && fechaInicio && fechaFin) {
           fechaLimiteInicio = new Date(fechaInicio);
           fechaLimiteFin = new Date(fechaFin);
-          fechaLimiteFin.setHours(23, 59, 59, 999); // Incluir todo el día final
+          fechaLimiteFin.setHours(23, 59, 59, 999);
         } else {
           const ahora = new Date();
           fechaLimiteFin = new Date(ahora);
@@ -58,14 +45,55 @@ function Dashboard() {
           fechaLimiteInicio.setDate(ahora.getDate() - parseInt(filtroFecha));
         }
 
-        // Log para depuración
-        console.log('🔍 Filtros aplicados:', {
-          tipoFiltro,
-          filtroFecha,
-          fechaInicio: getFechaLocal(fechaLimiteInicio),
-          fechaFin: getFechaLocal(fechaLimiteFin),
-          dias: Math.ceil((fechaLimiteFin - fechaLimiteInicio) / (1000 * 60 * 60 * 24))
+        // Verificar caché primero
+        const cacheKey = `dashboard_${tipoFiltro}_${filtroFecha}_${fechaInicio}_${fechaFin}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        
+        if (cachedData) {
+          try {
+            const { data, timestamp } = JSON.parse(cachedData);
+            const cacheAge = Date.now() - timestamp;
+            // Usar caché si tiene menos de 2 minutos
+            if (cacheAge < 2 * 60 * 1000) {
+              setStats(data);
+              setLoadingStats(false);
+              return;
+            }
+          } catch (e) {
+            // Si hay error en el caché, continuar con la consulta
+          }
+        }
+
+        // Obtener usuarios (con límite)
+        const usuariosQuery = query(collection(db, 'usuarios'), limit(100));
+        const usuariosSnap = await getDocs(usuariosQuery);
+        const usuariosMap = {};
+        usuariosSnap.forEach(doc => {
+          const data = doc.data();
+          usuariosMap[data.email] = data.nombre || data.email;
         });
+
+        // Consultas optimizadas con filtros de fecha
+        const valesServicioQuery = query(
+          collection(db, 'vales_servicio'),
+          where('fecha', '>=', fechaLimiteInicio),
+          where('fecha', '<=', fechaLimiteFin),
+          orderBy('fecha', 'desc')
+        );
+        
+        const valesGastoQuery = query(
+          collection(db, 'vales_gasto'),
+          where('fecha', '>=', fechaLimiteInicio),
+          where('fecha', '<=', fechaLimiteFin),
+          orderBy('fecha', 'desc')
+        );
+
+        const [valesServicioSnap, valesGastoSnap] = await Promise.all([
+          getDocs(valesServicioQuery),
+          getDocs(valesGastoQuery)
+        ]);
+
+
 
         let ingresos = 0;
         let valesServicioAprobados = 0;
@@ -357,21 +385,6 @@ function Dashboard() {
         // Convertir Set a número
         estadisticasHoy.profesionalesActivos = estadisticasHoy.profesionalesActivos.size;
 
-        // Log de resultados para depuración
-        console.log('📊 Resultados del período:', {
-          ingresos,
-          gananciaReal,
-          totalVales,
-          valesAprobados: totalValesAprobados,
-          valesPendientes: totalValesPendientes,
-          valesRechazados: totalValesRechazados,
-          topUsuarios: topUsuarios.length,
-          rangoFechas: {
-            inicio: getFechaLocal(fechaLimiteInicio),
-            fin: getFechaLocal(fechaLimiteFin),
-            dias: Math.ceil((fechaLimiteFin - fechaLimiteInicio) / (1000 * 60 * 60 * 24))
-          }
-        });
 
         setStats({
           ingresos,
@@ -421,6 +434,14 @@ function Dashboard() {
             comparacionVsPromedio: comparacionVsPromedio
           }
         });
+
+        // Guardar en caché
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          data: newStats,
+          timestamp: Date.now()
+        }));
+
+        setStats(newStats);
       } catch (err) {
         setError('Error al cargar los indicadores');
         console.error(err);

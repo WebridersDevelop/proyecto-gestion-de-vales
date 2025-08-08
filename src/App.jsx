@@ -1,5 +1,5 @@
 import { Routes, Route, useLocation, useNavigate, NavLink } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import ValesServicio from './pages/ValesServicio.jsx';
