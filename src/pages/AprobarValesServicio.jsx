@@ -39,12 +39,7 @@ function AprobarValesServicio() {
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
-  // Forzar modo tarjeta en móvil para mejor UX
-  useEffect(() => {
-    if (isMobile) {
-      setModoTarjeta(true);
-    }
-  }, [isMobile]);
+  // ELIMINADO: Ya no forzamos tarjetas en móvil - tabla será predeterminada siempre
 
   // Remover timeout que interfería con el loading natural de Firebase
 
@@ -737,9 +732,14 @@ function AprobarValesServicio() {
                             <div style={{ fontWeight: 600, color: '#1e293b' }}>
                               {vale.fecha.toLocaleDateString()}
                             </div>
-                            <small style={{ color: '#64748b' }}>
-                              {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </small>
+                            <div style={{ 
+                              color: '#64748b', 
+                              fontSize: '0.85rem', 
+                              fontWeight: 500,
+                              marginTop: 2
+                            }}>
+                              🕒 {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </td>
                         <td style={{ border: 'none', padding: '16px' }}>
@@ -1086,6 +1086,7 @@ function AprobarValesServicio() {
                         borderTop: '1px solid #e2e8f0'
                       }}>
                         <tr>
+                          <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Fecha/Hora</th>
                           <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Vale</th>
                           <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Valor</th>
                           <th style={{ border: 'none', padding: '12px', fontWeight: 600, fontSize: '0.9rem' }}>Acciones</th>
@@ -1096,6 +1097,19 @@ function AprobarValesServicio() {
                           <tr key={vale.id} style={{
                             borderBottom: index === valesPendientes.length - 1 ? 'none' : '1px solid #f1f5f9',
                           }}>
+                            <td style={{ border: 'none', padding: '12px' }}>
+                              <div style={{ fontSize: '0.85rem', color: '#1e293b', fontWeight: 600 }}>
+                                {vale.fecha.toLocaleDateString()}
+                              </div>
+                              <div style={{ 
+                                color: '#64748b', 
+                                fontSize: '0.8rem',
+                                fontWeight: 500,
+                                marginTop: 2
+                              }}>
+                                🕒 {vale.fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </td>
                             <td style={{ border: 'none', padding: '12px' }}>
                               <div>
                                 <Badge 
@@ -1122,18 +1136,21 @@ function AprobarValesServicio() {
                               </div>
                             </td>
                             <td style={{ border: 'none', padding: '12px' }}>
-                              <div className="d-flex gap-1">
+                              <div className="d-flex flex-column gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline-success"
                                   onClick={() => handleAccionVale(vale, 'aprobar')}
                                   style={{
                                     borderRadius: 8,
-                                    padding: '4px 8px',
-                                    border: '1px solid #16a34a'
+                                    padding: '6px 12px',
+                                    border: '1px solid #16a34a',
+                                    fontSize: '0.75rem',
+                                    width: '100%'
                                   }}
                                 >
-                                  <i className="bi bi-check"></i>
+                                  <i className="bi bi-check me-1"></i>
+                                  Aprobar
                                 </Button>
                                 <Button
                                   size="sm"
@@ -1141,11 +1158,14 @@ function AprobarValesServicio() {
                                   onClick={() => handleAccionVale(vale, 'rechazar')}
                                   style={{
                                     borderRadius: 8,
-                                    padding: '4px 8px',
-                                    border: '1px solid #ef4444'
+                                    padding: '6px 12px',
+                                    border: '1px solid #ef4444',
+                                    fontSize: '0.75rem',
+                                    width: '100%'
                                   }}
                                 >
-                                  <i className="bi bi-x"></i>
+                                  <i className="bi bi-x me-1"></i>
+                                  Rechazar
                                 </Button>
                               </div>
                             </td>
