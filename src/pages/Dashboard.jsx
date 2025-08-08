@@ -386,7 +386,7 @@ function Dashboard() {
         estadisticasHoy.profesionalesActivos = estadisticasHoy.profesionalesActivos.size;
 
 
-        setStats({
+        const newStats = {
           ingresos,
           saldo: ingresos, // Solo ingresos, no hay egresos reales de la tienda
           gananciaReal,
@@ -433,7 +433,7 @@ function Dashboard() {
             comparacionMargen: comparacionMargen,
             comparacionVsPromedio: comparacionVsPromedio
           }
-        });
+        };
 
         // Guardar en caché
         sessionStorage.setItem(cacheKey, JSON.stringify({
