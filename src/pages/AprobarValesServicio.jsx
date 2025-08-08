@@ -46,17 +46,7 @@ function AprobarValesServicio() {
     }
   }, [isMobile]);
 
-  // useEffect adicional para manejar la carga inicial
-  useEffect(() => {
-    // Simular un pequeño delay para asegurar que los datos se carguen
-    const timer = setTimeout(() => {
-      if (valesServicio.length === 0 && valesGasto.length === 0) {
-        setLoading(false); // Si no hay datos después de un tiempo, quitar loading
-      }
-    }, 3000); // 3 segundos de timeout
-
-    return () => clearTimeout(timer);
-  }, []);
+  // Remover timeout que interfería con el loading natural de Firebase
 
   useEffect(() => {
     // Query simplificado - prioriza velocidad sobre ordenamiento perfecto
@@ -81,6 +71,7 @@ function AprobarValesServicio() {
       // Ordenar en cliente por fecha descendente (más recientes primero)
       arr.sort((a, b) => b.fecha - a.fecha);
       setValesServicio(arr);
+      setLoading(false); // ✅ Quitar loading cuando lleguen datos
     });
     return () => unsub();
   }, []);
@@ -108,6 +99,7 @@ function AprobarValesServicio() {
       // Ordenar en cliente por fecha descendente
       arr.sort((a, b) => b.fecha - a.fecha);
       setValesGasto(arr);
+      setLoading(false); // ✅ Quitar loading cuando lleguen datos
     });
     return () => unsub();
   }, []);
