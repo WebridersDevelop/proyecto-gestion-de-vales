@@ -1277,6 +1277,13 @@ function CuadreDiario() {
           fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
         });
       });
+      
+      // DEBUG: Contar reads de vales servicio
+      if (window.fbCountRead) {
+        window.fbCountRead('CuadreDiario-ValesServicio', snap.size);
+      }
+      console.log(`📊 [DEBUG] CuadreDiario ValesServicio: ${snap.size} documentos leídos`);
+      
       updateVales();
       setLoading(false);
     });
@@ -1300,11 +1307,24 @@ function CuadreDiario() {
           fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
         });
       });
+      
+      // DEBUG: Contar reads de vales gasto
+      if (window.fbCountRead) {
+        window.fbCountRead('CuadreDiario-ValesGasto', snap.size);
+      }
+      console.log(`📊 [DEBUG] CuadreDiario ValesGasto: ${snap.size} documentos leídos`);
+      
       updateVales();
       setLoading(false);
     });
 
     getDocs(collection(db, 'usuarios')).then(usuariosSnap => {
+      // DEBUG: Contar reads de usuarios
+      if (window.fbCountRead) {
+        window.fbCountRead('CuadreDiario-Usuarios', usuariosSnap.size);
+      }
+      console.log(`📊 [DEBUG] CuadreDiario Usuarios: ${usuariosSnap.size} documentos leídos`);
+      
       const nombres = {};
       usuariosSnap.forEach(docu => {
         const data = docu.data();
