@@ -151,6 +151,22 @@ function ValesServicio() {
       // Usamos directamente la hora local del sistema asumiendo que está configurado para Chile
       const fechaVale = Timestamp.fromDate(ahora);
       
+      // ✅ OPTIMISTIC UPDATE - Mostrar vale INMEDIATAMENTE
+      const tempVale = {
+        id: `temp_${Date.now()}`, // ID temporal
+        codigo: codigoServicio,
+        servicio: servicio.trim(),
+        valor: Number(valor),
+        peluquero: nombreUsuario,
+        peluqueroUid: user.uid,
+        peluqueroEmail: user.email,
+        fecha: ahora, // Usar fecha local para display inmediato
+        estado: 'pendiente'
+      };
+      
+      // Actualizar UI INMEDIATAMENTE - Cliente ve el vale al instante
+      setValesUsuario(prevVales => [tempVale, ...prevVales]);
+
       await setDoc(valeRef, {
         codigo: codigoServicio,
         servicio: servicio.trim(),
@@ -162,7 +178,7 @@ function ValesServicio() {
         estado: 'pendiente'
       });
 
-      setMensaje(`Vale creado exitosamente con código: ${codigoServicio}`);
+      setMensaje(`✅ Vale creado exitosamente con código: ${codigoServicio}`);
       setServicio('');
       setValor('');
       servicioRef.current?.focus();

@@ -39,6 +39,13 @@ function AprobarValesServicio() {
 
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
+  // Forzar modo tarjeta en móvil para mejor UX
+  useEffect(() => {
+    if (isMobile) {
+      setModoTarjeta(true);
+    }
+  }, [isMobile]);
+
   // useEffect adicional para manejar la carga inicial
   useEffect(() => {
     // Simular un pequeño delay para asegurar que los datos se carguen
@@ -52,12 +59,11 @@ function AprobarValesServicio() {
   }, []);
 
   useEffect(() => {
-    // Query optimizado para vales de servicio pendientes
+    // Query simplificado - prioriza velocidad sobre ordenamiento perfecto
     const qServicio = query(
       collection(db, 'vales_servicio'),
       where('estado', '==', 'pendiente'),
-      orderBy('fecha', 'desc'),
-      limit(100)
+      limit(100) // Sin orderBy para evitar delays de índices
     );
     
     const unsub = onSnapshot(qServicio, snap => {
@@ -72,18 +78,19 @@ function AprobarValesServicio() {
           tipo: 'servicio'
         });
       });
+      // Ordenar en cliente por fecha descendente (más recientes primero)
+      arr.sort((a, b) => b.fecha - a.fecha);
       setValesServicio(arr);
     });
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    // Query optimizado para vales de gasto pendientes
+    // Query simplificado para vales de gasto pendientes
     const qGasto = query(
       collection(db, 'vales_gasto'),
       where('estado', '==', 'pendiente'),
-      orderBy('fecha', 'desc'),
-      limit(100)
+      limit(100) // Sin orderBy para respuesta instantánea
     );
     
     const unsub = onSnapshot(qGasto, snap => {
@@ -98,6 +105,8 @@ function AprobarValesServicio() {
           tipo: 'gasto'
         });
       });
+      // Ordenar en cliente por fecha descendente
+      arr.sort((a, b) => b.fecha - a.fecha);
       setValesGasto(arr);
     });
     return () => unsub();
