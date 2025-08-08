@@ -1,7 +1,6 @@
 import { Routes, Route, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Login from './pages/Login.jsx';
-import Dashboard from './pages/Dashboard.jsx';
 import ValesServicio from './pages/ValesServicio.jsx';
 import ValesGasto from './pages/ValesGasto.jsx';
 import CuadreDiario from './pages/CuadreDiario.jsx';
@@ -91,11 +90,6 @@ function AppContent() {
       <main>
         <Routes>
           <Route path="/" element={rol ? <HomeObento /> : <Login />} />
-          <Route path="/dashboard" element={
-            rol === 'admin'
-              ? <Dashboard />
-              : <HomeObento />
-          } />
           <Route path="/vales-servicio" element={
             (rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol))
               ? <ValesServicio />
@@ -140,16 +134,6 @@ function AppContent() {
               <i className="bi bi-house-heart" aria-hidden="true"></i>
               <span>Inicio</span>
             </NavLink>
-            {rol === 'admin' && (
-              <NavLink 
-                className="bottom-nav-link" 
-                to="/dashboard"
-                style={{'--nav-color': '#6366f1'}}
-              >
-                <i className="bi bi-speedometer2" aria-hidden="true"></i>
-                <span>Dashboard</span>
-              </NavLink>
-            )}
             {(rol === 'admin' || rol === 'anfitrion' || ['barbero', 'estilista', 'estetica'].includes(rol)) && (
               <NavLink 
                 className="bottom-nav-link" 

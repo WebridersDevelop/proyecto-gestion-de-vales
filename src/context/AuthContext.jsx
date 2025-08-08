@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import pwaOptimizer from '../utils/pwaOptimizations';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext();
@@ -25,7 +26,7 @@ export function AuthProvider({ children }) {
       setNombre(null);
       
       if (firebaseUser) {
-        // Verificar caché local primero
+        // Verificar caché local primero - OPTIMIZADO para PWA
         const cacheKey = `user_data_${firebaseUser.uid}`;
         const cachedData = sessionStorage.getItem(cacheKey);
         
@@ -33,11 +34,12 @@ export function AuthProvider({ children }) {
           try {
             const { userData, timestamp } = JSON.parse(cachedData);
             const cacheAge = Date.now() - timestamp;
-            // Usar caché si tiene menos de 5 minutos
-            if (cacheAge < 5 * 60 * 1000) {
+            // Caché más agresivo para PWA: 30 minutos vs 5 minutos
+            if (cacheAge < 30 * 60 * 1000) {
               setRol(userData.rol || "");
               setNombre(userData.nombre || "Usuario sin nombre");
               setLoading(false);
+              console.log('👤 Usuario cargado desde cache PWA');
               return;
             }
           } catch (e) {

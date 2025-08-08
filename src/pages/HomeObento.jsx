@@ -114,13 +114,6 @@ function HomeObento() {
   };
 
   const botones = [
-    ...(rol === 'admin' ? [{
-      icon: 'bi-speedometer2',
-      label: 'Dashboard',
-      to: '/dashboard',
-      style: buttonStyles.dashboard,
-      description: 'Análisis y métricas'
-    }] : []),
     ...(rolesValesYGastos.includes(rol) ? [{
       icon: 'bi-receipt-cutoff',
       label: 'Vales de Servicio',
@@ -273,12 +266,6 @@ function HomeObento() {
             <i className="bi bi-house" aria-hidden="true"></i>
             <span>Inicio</span>
           </NavLink>
-          {rol === 'admin' && (
-            <NavLink className="bottom-nav-link" to="/dashboard">
-              <i className="bi bi-speedometer2" aria-hidden="true"></i>
-              <span>Dashboard</span>
-            </NavLink>
-          )}
           {rolesValesYGastos.includes(rol) && (
             <NavLink className="bottom-nav-link" to="/vales-servicio">
               <i className="bi bi-receipt" aria-hidden="true"></i>
