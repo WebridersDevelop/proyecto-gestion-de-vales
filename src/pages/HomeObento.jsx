@@ -78,10 +78,28 @@ function HomeObento() {
 
   // Actualizar la hora cada minuto
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
-    return () => clearInterval(timer);
+    const updateTime = () => {
+      // Solo actualizar si la página es visible
+      if (document.visibilityState === 'visible') {
+        setCurrentTime(new Date());
+      }
+    };
+
+    const timer = setInterval(updateTime, 60000);
+    
+    // También actualizar cuando la página se vuelve visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setCurrentTime(new Date());
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Define los roles que pueden ver vales y gastos

@@ -39,35 +39,27 @@ function ValesGasto() {
     
     setLoading(true);
     
-    const unsub = onSnapshot(collection(db, 'vales_gasto'), snap => {
+    // Query optimizado - FILTRAR EN SERVER-SIDE, no en cliente
+    const q = query(
+      collection(db, 'vales_gasto'),
+      where('peluqueroUid', '==', user.uid),
+      orderBy('fecha', 'desc'),
+      limit(50) // Límite agresivo - solo últimos 50 vales
+    );
+
+    const unsub = onSnapshot(q, snap => {
       const vales = [];
       
       snap.forEach(docu => {
         const data = docu.data();
-        
-        // SEGURIDAD: Filtrado estricto - TODOS los usuarios solo ven SUS PROPIOS vales
-        // La gestión completa de todos los vales se realiza en la sección de aprobación
-        let mostrarVale = false;
-        
-        if (['admin', 'anfitrion', 'barbero', 'estilista', 'estetica'].includes(rol)) {
-          // SEGURIDAD: TODOS los roles autorizados SOLO ven SUS PROPIOS vales
-          // Comparación estricta de UID para garantizar privacidad total
-          mostrarVale = (data.peluqueroUid === user.uid);
-        } else {
-          // SEGURIDAD: Cualquier otro rol no puede ver vales
-          mostrarVale = false;
-        }
-        
-        if (mostrarVale) {
-          vales.push({
-            ...data,
-            id: docu.id,
-            fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
-          });
-        }
+        vales.push({
+          ...data,
+          id: docu.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
       });
       
-      vales.sort((a, b) => b.fecha - a.fecha);
+      // Ya no necesitamos sort porque viene ordenado del servidor
       setValesUsuario(vales);
       setLoading(false);
     });

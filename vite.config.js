@@ -7,7 +7,26 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'manual', // No auto-update para reducir background activity
+      workbox: {
+        // Configuración más conservadora para el service worker
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/firestore\.googleapis\.com\//,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'firestore-cache',
+              networkTimeoutSeconds: 10,
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ],
+        // Reducir actividad en background
+        skipWaiting: false,
+        clientsClaim: false
+      },
       manifest: {
         short_name: 'Vales',
         name: 'Gestión de Vales',

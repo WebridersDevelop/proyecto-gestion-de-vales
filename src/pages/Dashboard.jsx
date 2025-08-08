@@ -19,13 +19,30 @@ function Dashboard() {
   const [tipoFiltro, setTipoFiltro] = useState('predefinido'); // 'predefinido' o 'personalizado'
   const [tiempoActual, setTiempoActual] = useState(new Date());
 
-  // Actualizar tiempo cada minuto
+  // Actualizar tiempo cada minuto - SOLO cuando página es visible
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTiempoActual(new Date());
-    }, 60000); // Actualizar cada minuto
+    const updateTime = () => {
+      // Solo actualizar si la página es visible
+      if (document.visibilityState === 'visible') {
+        setTiempoActual(new Date());
+      }
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(updateTime, 60000);
+    
+    // También actualizar cuando la página se vuelve visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setTiempoActual(new Date());
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -53,8 +70,8 @@ function Dashboard() {
           try {
             const { data, timestamp } = JSON.parse(cachedData);
             const cacheAge = Date.now() - timestamp;
-            // Usar caché si tiene menos de 2 minutos
-            if (cacheAge < 2 * 60 * 1000) {
+            // Usar caché si tiene menos de 10 minutos
+            if (cacheAge < 10 * 60 * 1000) {
               setStats(data);
               setLoadingStats(false);
               return;
