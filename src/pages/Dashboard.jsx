@@ -48,7 +48,7 @@ function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Calcular fechas límite primero para usar en queries
+        // FIXED: Usar fechas estables para evitar re-queries constantes
         let fechaLimiteInicio, fechaLimiteFin;
         
         if (tipoFiltro === 'personalizado' && fechaInicio && fechaFin) {
@@ -56,22 +56,28 @@ function Dashboard() {
           fechaLimiteFin = new Date(fechaFin);
           fechaLimiteFin.setHours(23, 59, 59, 999);
         } else {
-          const ahora = new Date();
-          fechaLimiteFin = new Date(ahora);
-          fechaLimiteInicio = new Date();
-          fechaLimiteInicio.setDate(ahora.getDate() - parseInt(filtroFecha));
+          // CRITICAL FIX: Usar fecha estable basada en el día actual, no tiempo exacto
+          const hoyLocal = new Date();
+          hoyLocal.setHours(23, 59, 59, 999); // Fin del día actual
+          fechaLimiteFin = new Date(hoyLocal);
+          
+          fechaLimiteInicio = new Date(hoyLocal);
+          fechaLimiteInicio.setDate(hoyLocal.getDate() - parseInt(filtroFecha));
+          fechaLimiteInicio.setHours(0, 0, 0, 0); // Inicio del día límite
         }
 
-        // Verificar caché primero
-        const cacheKey = `dashboard_${tipoFiltro}_${filtroFecha}_${fechaInicio}_${fechaFin}`;
+        // CRITICAL FIX: Crear cache key estable basado en fechas normalizadas
+        const fechaInicioStr = fechaLimiteInicio.toISOString().split('T')[0];
+        const fechaFinStr = fechaLimiteFin.toISOString().split('T')[0];
+        const cacheKey = `dashboard_${tipoFiltro}_${filtroFecha}_${fechaInicioStr}_${fechaFinStr}`;
         const cachedData = sessionStorage.getItem(cacheKey);
         
         if (cachedData) {
           try {
             const { data, timestamp } = JSON.parse(cachedData);
             const cacheAge = Date.now() - timestamp;
-            // Usar caché si tiene menos de 10 minutos
-            if (cacheAge < 10 * 60 * 1000) {
+            // EXTENDED cache time: 30 minutes instead of 10 para reducir queries
+            if (cacheAge < 30 * 60 * 1000) {
               setStats(data);
               setLoadingStats(false);
               return;
