@@ -29,11 +29,10 @@ function ValesServicio() {
     if (!user?.uid || !rol) return;
     setLoading(true);
     
-    // Query optimizado con filtro directo
+    // Query temporal sin orderBy (hasta que índices estén listos)
     const q = query(
       collection(db, 'vales_servicio'),
       where('peluqueroUid', '==', user.uid),
-      orderBy('fecha', 'desc'),
       limit(50) // Limitar a últimos 50 vales
     );
     
@@ -47,6 +46,8 @@ function ValesServicio() {
           fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
         });
       });
+      // Ordenar en cliente mientras no tengamos índice
+      vales.sort((a, b) => b.fecha - a.fecha);
       setValesUsuario(vales);
       setLoading(false);
     });

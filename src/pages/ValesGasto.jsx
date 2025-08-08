@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase';
-import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, onSnapshot } from 'firebase/firestore';
+import { runTransaction, getDoc, doc, collection, setDoc, Timestamp, onSnapshot, query, where, limit } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 import { getCardStyles, getBackdropFilter, getButtonStyles, getInputStyles } from '../utils/styleUtils';
@@ -39,11 +39,10 @@ function ValesGasto() {
     
     setLoading(true);
     
-    // Query optimizado - FILTRAR EN SERVER-SIDE, no en cliente
+    // Query temporal sin orderBy (hasta que índices estén listos)
     const q = query(
       collection(db, 'vales_gasto'),
       where('peluqueroUid', '==', user.uid),
-      orderBy('fecha', 'desc'),
       limit(50) // Límite agresivo - solo últimos 50 vales
     );
 
@@ -59,7 +58,8 @@ function ValesGasto() {
         });
       });
       
-      // Ya no necesitamos sort porque viene ordenado del servidor
+      // Ordenar en cliente mientras no tengamos índice
+      vales.sort((a, b) => b.fecha - a.fecha);
       setValesUsuario(vales);
       setLoading(false);
     });
