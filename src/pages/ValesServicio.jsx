@@ -43,6 +43,7 @@ function ValesServicio() {
     const fechaDesde = new Date(hoy + 'T00:00:00');
     const fechaHasta = new Date(hoy + 'T23:59:59');
     
+    // Query optimizada con filtro por fecha en servidor
     const q = query(
       collection(db, 'vales_servicio'),
       where('peluqueroUid', '==', user.uid),
@@ -55,6 +56,7 @@ function ValesServicio() {
       const vales = [];
       snap.forEach(docu => {
         const data = docu.data();
+        // Ya filtrado en servidor, solo agregar todos los documentos
         vales.push({
           ...data,
           id: docu.id,
