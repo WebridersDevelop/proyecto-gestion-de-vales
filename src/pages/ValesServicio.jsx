@@ -114,13 +114,21 @@ function ValesServicio() {
     }
 
     try {
+      console.log('🚀 [DEBUG] Iniciando creación de vale...');
+      if (window.fbDebugger) {
+        console.log(`📊 Lecturas antes de crear: ${window.fbDebugger.sessionStats.totalReads}`);
+      }
+      
       // Verificar que tenemos el nombre del usuario
       let nombreUsuario = nombre;
       
       // Si no tenemos nombre del contexto, intentar obtenerlo directamente
       if (!nombreUsuario || nombreUsuario === 'Usuario sin nombre') {
+        console.log('👤 [DEBUG] Obteniendo nombre de usuario...');
         try {
           const usuarioDoc = await getDoc(doc(db, 'usuarios', user.uid));
+          if (window.fbDebugger) window.fbDebugger.countRead('ValesServicio-getNombre', 1);
+          
           if (usuarioDoc.exists()) {
             const userData = usuarioDoc.data();
             nombreUsuario = userData.nombre || 'Usuario sin nombre configurado';
@@ -134,12 +142,15 @@ function ValesServicio() {
       }
 
       // --- SISTEMA DE CÓDIGOS CORRELATIVOS OPTIMIZADO CON CONTADORES ---
+      console.log('🔢 [DEBUG] Generando código correlativo...');
       const hoy = getHoyLocal(); // "YYYY-MM-DD"
       const contadorRef = doc(db, 'contadores', `vales_servicio_${hoy}`);
       
       // Transacción para obtener y actualizar el contador diario
       const nuevoNumero = await runTransaction(db, async (transaction) => {
         const contadorSnap = await transaction.get(contadorRef);
+        if (window.fbDebugger) window.fbDebugger.countRead('ValesServicio-contador', 1);
+        
         let siguienteNumero;
         
         if (contadorSnap.exists()) {
@@ -154,6 +165,7 @@ function ValesServicio() {
       });
       
       const codigoServicio = `S-${String(nuevoNumero).padStart(3, '0')}`;
+      console.log(`🔢 [DEBUG] Código generado: ${codigoServicio}`);
 
       // Crear el vale directamente
       const valeRef = doc(collection(db, 'vales_servicio'));
@@ -191,6 +203,12 @@ function ValesServicio() {
         estado: 'pendiente'
       });
 
+      // Debug final
+      if (window.fbDebugger) {
+        console.log(`📊 Lecturas después de crear: ${window.fbDebugger.sessionStats.totalReads}`);
+      }
+      console.log('✅ [DEBUG] Vale creado exitosamente');
+      
       setMensaje(`✅ Vale creado exitosamente con código: ${codigoServicio}`);
       setServicio('');
       setValor('');
@@ -862,15 +880,6 @@ function ValesServicio() {
       </Row>
     </div>
   );
-}
-
-function getHoyLocal() {
-  // Usar la fecha local del sistema directamente
-  const hoy = new Date();
-  const year = hoy.getFullYear();
-  const month = String(hoy.getMonth() + 1).padStart(2, '0');
-  const day = String(hoy.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 function getFechaLocal(fecha) {
