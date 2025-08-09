@@ -331,7 +331,7 @@ const ListaCompactaVale = ({ vale, editandoVale, valoresEditados, handleCambioVa
                 <Button 
                   size="sm" 
                   variant="outline-danger"
-                  onClick={() => handleEliminar(vale.id)}
+                  onClick={() => handleEliminar(vale)}
                   style={{ fontSize: '9px', padding: '2px 6px', minWidth: '24px', minHeight: '24px' }}
                 >
                   🗑
@@ -758,7 +758,7 @@ const TarjetaValeDesktop = ({ vale, editandoVale, valoresEditados, handleCambioV
                   {(rol === 'admin' || rol === 'anfitrion') && (
                     <Button 
                       variant="outline-danger"
-                      onClick={() => handleEliminar(vale.id)}
+                      onClick={() => handleEliminar(vale)}
                       style={{ 
                         fontSize: '13px', 
                         padding: '8px 16px',
@@ -1071,7 +1071,7 @@ const TarjetaVale = ({ vale, editandoVale, valoresEditados, handleCambioValor, n
                 <Button 
                   size="sm" 
                   variant="outline-danger"
-                  onClick={() => handleEliminar(vale.id)}
+                  onClick={() => handleEliminar(vale)}
                   style={{ fontSize: '11px', padding: '4px 8px' }}
                 >
                   🗑 Eliminar
@@ -1197,6 +1197,9 @@ function CuadreDiario() {
   const [valoresEditados, setValoresEditados] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [listenersActivos, setListenersActivos] = useState(true);
+  const [unsubscribers, setUnsubscribers] = useState({ unsub1: null, unsub2: null });
+  
   function getHoyLocal() {
     // Usar la fecha local del sistema directamente
     const hoy = new Date();
@@ -1243,6 +1246,8 @@ function CuadreDiario() {
   }
 
   useEffect(() => {
+    if (!listenersActivos) return;
+    
     setLoading(true);
     let valesServicio = [];
     let valesGasto = [];
@@ -1261,29 +1266,32 @@ function CuadreDiario() {
       }
     };
 
-    // OPTIMIZADO: Query respeta filtros desde/hasta existentes
+    // Query optimizado: filtrar por fecha en servidor para reducir lecturas
     const fechaDesde = new Date(desde + 'T00:00:00');
     const fechaHasta = new Date(hasta + 'T23:59:59');
+    console.log(`📅 [DEBUG] Cargando vales para fechas: ${desde} a ${hasta}`);
     
-    console.log(`📅 [DEBUG] Queries con filtro: ${desde} a ${hasta}`);
-    
+    // Query con filtro de fecha en servidor - menos lecturas
     const qServicio = query(
       collection(db, 'vales_servicio'),
       where('fecha', '>=', fechaDesde),
-      where('fecha', '<=', fechaHasta), // Respeta filtro hasta
+      where('fecha', '<=', fechaHasta),
       orderBy('fecha', 'desc'),
-      limit(15) // Solo primeros 15 del período seleccionado
+      limit(50) // Límite reducido porque filtramos en servidor
     );
 
     unsub1 = onSnapshot(qServicio, snap => {
       valesServicio = [];
       snap.forEach(doc => {
         const data = doc.data();
+        const fechaDoc = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
+        
+        // Ya filtrado en servidor, solo agregar todos los documentos
         valesServicio.push({
           ...data,
           tipo: 'Ingreso',
           id: doc.id,
-          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+          fecha: fechaDoc
         });
       });
       
@@ -1291,30 +1299,33 @@ function CuadreDiario() {
       if (window.fbCountRead) {
         window.fbCountRead('CuadreDiario-ValesServicio', snap.size);
       }
-      console.log(`📊 [DEBUG] CuadreDiario ValesServicio: ${snap.size} documentos leídos`);
+      console.log(`📊 [DEBUG] CuadreDiario ValesServicio: ${snap.size} documentos (filtrado en servidor)`);
       
       updateVales();
       setLoading(false);
     });
 
-    // Query optimizado para vales de gasto - también respeta filtros
+    // Query optimizado para vales de gasto con filtro en servidor
     const qGasto = query(
       collection(db, 'vales_gasto'),
       where('fecha', '>=', fechaDesde),
-      where('fecha', '<=', fechaHasta), // Respeta filtro hasta
+      where('fecha', '<=', fechaHasta),
       orderBy('fecha', 'desc'),
-      limit(15) // Solo primeros 15 del período seleccionado
+      limit(50) // Límite reducido porque filtramos en servidor
     );
 
     unsub2 = onSnapshot(qGasto, snap => {
       valesGasto = [];
       snap.forEach(doc => {
         const data = doc.data();
+        const fechaDoc = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
+        
+        // Ya filtrado en servidor, solo agregar todos los documentos
         valesGasto.push({
           ...data,
           tipo: 'Egreso',
           id: doc.id,
-          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+          fecha: fechaDoc
         });
       });
       
@@ -1322,7 +1333,7 @@ function CuadreDiario() {
       if (window.fbCountRead) {
         window.fbCountRead('CuadreDiario-ValesGasto', snap.size);
       }
-      console.log(`📊 [DEBUG] CuadreDiario ValesGasto: ${snap.size} documentos leídos`);
+      console.log(`📊 [DEBUG] CuadreDiario ValesGasto: ${snap.size} documentos (filtrado en servidor)`);
       
       updateVales();
       setLoading(false);
@@ -1343,12 +1354,15 @@ function CuadreDiario() {
       setNombresUsuarios(nombres);
     }).catch(() => setError('Error al cargar los datos'));
 
+    // Guardar unsubscribers para control manual
+    setUnsubscribers({ unsub1, unsub2 });
+
     return () => {
       isMounted = false;
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, [desde, hasta]); // CRÍTICO: Re-ejecutar cuando cambien las fechas
+  }, [desde, hasta, listenersActivos]); // CRÍTICO: Re-ejecutar cuando cambien las fechas o listeners
 
   const handleFiltro = (e) => {
     setFiltros({ ...filtros, [e.target.name]: e.target.value });
@@ -1356,8 +1370,38 @@ function CuadreDiario() {
 
   const handleEliminar = async (vale) => {
     if (window.confirm('¿Seguro que deseas eliminar este vale?')) {
-      await deleteDoc(doc(db, vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto', vale.id));
-      setVales(vales => vales.filter(v => v.id !== vale.id));
+      try {
+        // Pausar listeners temporalmente para evitar conflictos
+        console.log('🔄 Pausando listeners para eliminación...');
+        setListenersActivos(false);
+        
+        // Cleanup listeners activos
+        if (unsubscribers.unsub1) unsubscribers.unsub1();
+        if (unsubscribers.unsub2) unsubscribers.unsub2();
+        
+        // Esperar un poco para que se liberen los recursos
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const collection = vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto';
+        await deleteDoc(doc(db, collection, vale.id));
+        
+        // Actualizar estado manualmente
+        setVales(currentVales => currentVales.filter(v => v.id !== vale.id));
+        
+        console.log(`✅ Vale eliminado: ${vale.id}`);
+        
+        // Reactivar listeners después de un delay
+        setTimeout(() => {
+          console.log('🔄 Reactivando listeners...');
+          setListenersActivos(true);
+        }, 1000);
+        
+      } catch (error) {
+        console.error('❌ Error al eliminar:', error);
+        alert('Error al eliminar el vale.');
+        // Reactivar listeners incluso si hay error
+        setListenersActivos(true);
+      }
     }
   };
 
