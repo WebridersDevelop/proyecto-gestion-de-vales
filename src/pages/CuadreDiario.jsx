@@ -1148,6 +1148,12 @@ function CuadreDiario() {
   const [ordenColumna, _setOrdenColumna] = useState('fecha');
   const [ordenDireccion, setOrdenDireccion] = useState('desc');
   
+  // Estados para "Ver más" - sistema de paginación optimizado
+  const [valesServicioTodos, setValesServicioTodos] = useState([]);
+  const [valesGastoTodos, setValesGastoTodos] = useState([]);
+  const [mostrandoTodos, setMostrandoTodos] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  
   // Hook para detectar tamaño de pantalla con breakpoints mejorados
   const [screenSize, setScreenSize] = useState({
     width: window.innerWidth,
@@ -1255,15 +1261,18 @@ function CuadreDiario() {
       }
     };
 
-    // Query optimizado para vales de servicio con filtro de fecha
-    const fechaLimite = new Date();
-    fechaLimite.setDate(fechaLimite.getDate() - 90); // Últimos 90 días
+    // OPTIMIZADO: Query respeta filtros desde/hasta existentes
+    const fechaDesde = new Date(desde + 'T00:00:00');
+    const fechaHasta = new Date(hasta + 'T23:59:59');
+    
+    console.log(`📅 [DEBUG] Queries con filtro: ${desde} a ${hasta}`);
     
     const qServicio = query(
       collection(db, 'vales_servicio'),
-      where('fecha', '>=', fechaLimite),
+      where('fecha', '>=', fechaDesde),
+      where('fecha', '<=', fechaHasta), // Respeta filtro hasta
       orderBy('fecha', 'desc'),
-      limit(500)
+      limit(15) // Solo primeros 15 del período seleccionado
     );
 
     unsub1 = onSnapshot(qServicio, snap => {
@@ -1288,12 +1297,13 @@ function CuadreDiario() {
       setLoading(false);
     });
 
-    // Query optimizado para vales de gasto con filtro de fecha
+    // Query optimizado para vales de gasto - también respeta filtros
     const qGasto = query(
       collection(db, 'vales_gasto'),
-      where('fecha', '>=', fechaLimite),
+      where('fecha', '>=', fechaDesde),
+      where('fecha', '<=', fechaHasta), // Respeta filtro hasta
       orderBy('fecha', 'desc'),
-      limit(500)
+      limit(15) // Solo primeros 15 del período seleccionado
     );
 
     unsub2 = onSnapshot(qGasto, snap => {
@@ -1338,7 +1348,7 @@ function CuadreDiario() {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, []);
+  }, [desde, hasta]); // CRÍTICO: Re-ejecutar cuando cambien las fechas
 
   const handleFiltro = (e) => {
     setFiltros({ ...filtros, [e.target.name]: e.target.value });
@@ -1348,6 +1358,82 @@ function CuadreDiario() {
     if (window.confirm('¿Seguro que deseas eliminar este vale?')) {
       await deleteDoc(doc(db, vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto', vale.id));
       setVales(vales => vales.filter(v => v.id !== vale.id));
+    }
+  };
+
+  // Función para cargar TODOS los vales (botón "Ver más")
+  const cargarMasVales = async () => {
+    setCargandoMas(true);
+    
+    try {
+      // Usar las mismas fechas que el filtro actual
+      const fechaDesde = new Date(desde + 'T00:00:00');
+      const fechaHasta = new Date(hasta + 'T23:59:59');
+      
+      console.log(`📅 [DEBUG] Ver Más con filtro: ${desde} a ${hasta}`);
+      
+      // Consulta SIN LÍMITE para obtener todos los vales del período
+      const qServicioTodos = query(
+        collection(db, 'vales_servicio'),
+        where('fecha', '>=', fechaDesde),
+        where('fecha', '<=', fechaHasta),
+        orderBy('fecha', 'desc')
+        // SIN limit() para obtener todos del período
+      );
+      
+      const qGastoTodos = query(
+        collection(db, 'vales_gasto'),  
+        where('fecha', '>=', fechaDesde),
+        where('fecha', '<=', fechaHasta),
+        orderBy('fecha', 'desc')
+        // SIN limit() para obtener todos del período
+      );
+
+      const [valesServicioSnap, valesGastoSnap] = await Promise.all([
+        getDocs(qServicioTodos),
+        getDocs(qGastoTodos)
+      ]);
+
+      // DEBUG: Contar los reads adicionales
+      if (window.fbCountRead) {
+        window.fbCountRead('CuadreDiario-VerMas-ValesServicio', valesServicioSnap.size);
+        window.fbCountRead('CuadreDiario-VerMas-ValesGasto', valesGastoSnap.size);
+      }
+      console.log(`📊 [DEBUG] Ver Más - ValesServicio: ${valesServicioSnap.size} documentos`);
+      console.log(`📊 [DEBUG] Ver Más - ValesGasto: ${valesGastoSnap.size} documentos`);
+
+      const todosValesServicio = [];
+      valesServicioSnap.forEach(doc => {
+        const data = doc.data();
+        todosValesServicio.push({
+          ...data,
+          tipo: 'Ingreso',
+          id: doc.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
+      });
+
+      const todosValesGasto = [];
+      valesGastoSnap.forEach(doc => {
+        const data = doc.data();
+        todosValesGasto.push({
+          ...data,
+          tipo: 'Egreso', 
+          id: doc.id,
+          fecha: data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha)
+        });
+      });
+
+      // Combinar todos los vales
+      const todosLosVales = [...todosValesServicio, ...todosValesGasto];
+      setVales(todosLosVales);
+      setMostrandoTodos(true);
+      
+    } catch (error) {
+      console.error('Error cargando más vales:', error);
+      setError('Error al cargar todos los vales');
+    } finally {
+      setCargandoMas(false);
     }
   };
 
@@ -2651,6 +2737,34 @@ function CuadreDiario() {
                                     onCambioPagina={setPaginaActual}
                                     elementosPorPagina={elementosPorPagina}
                                   />
+                                  
+                                  {/* Botón Ver Más - Solo mostrar si NO se están mostrando todos los vales */}
+                                  {!mostrandoTodos && (
+                                    <div className="d-flex justify-content-center mt-3">
+                                      <Button
+                                        variant="outline-primary"
+                                        onClick={cargarMasVales}
+                                        disabled={cargandoMas}
+                                        style={{ 
+                                          borderRadius: 12,
+                                          padding: '8px 24px',
+                                          fontWeight: 600,
+                                          fontSize: '14px'
+                                        }}
+                                      >
+                                        {cargandoMas ? (
+                                          <>
+                                            <Spinner animation="border" size="sm" className="me-2" />
+                                            Cargando todos los vales...
+                                          </>
+                                        ) : (
+                                          <>
+                                            📊 Ver todos los vales (últimos 90 días)
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
                                 </>
                               );
                             })()}
