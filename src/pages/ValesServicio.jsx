@@ -1,9 +1,18 @@
 import { useRef, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, doc, setDoc, Timestamp, onSnapshot, getDoc, getDocs, query, where, orderBy, limit, runTransaction } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Form, Button, Card, Row, Col, Alert, Table, Badge, Spinner } from 'react-bootstrap';
 import { getCardStyles, getBackdropFilter, getButtonStyles, getInputStyles } from '../utils/styleUtils';
+
+function getHoyLocal() {
+  // Usar la fecha local del sistema directamente
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = String(hoy.getMonth() + 1).padStart(2, '0');
+  const day = String(hoy.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function ValesServicio() {
   const { user, rol, nombre } = useAuth();
@@ -29,11 +38,17 @@ function ValesServicio() {
     if (!user?.uid || !rol) return;
     setLoading(true);
     
-    // Query temporal sin orderBy (hasta que índices estén listos)
+    // Filtrar solo vales del día actual del usuario
+    const hoy = getHoyLocal(); // "YYYY-MM-DD"
+    const fechaDesde = new Date(hoy + 'T00:00:00');
+    const fechaHasta = new Date(hoy + 'T23:59:59');
+    
     const q = query(
       collection(db, 'vales_servicio'),
       where('peluqueroUid', '==', user.uid),
-      limit(50) // Limitar a últimos 50 vales
+      where('fecha', '>=', fechaDesde),
+      where('fecha', '<=', fechaHasta),
+      limit(50) // Solo vales del día actual
     );
     
     const unsub = onSnapshot(q, snap => {
@@ -118,30 +133,27 @@ function ValesServicio() {
         }
       }
 
-      // --- SISTEMA DE CÓDIGOS CORRELATIVOS ---
-      // Obtener el último número de vale para generar el siguiente
-      const valesQuery = query(
-        collection(db, 'vales_servicio'),
-        where('codigo', '!=', null)
-      );
+      // --- SISTEMA DE CÓDIGOS CORRELATIVOS OPTIMIZADO CON CONTADORES ---
+      const hoy = getHoyLocal(); // "YYYY-MM-DD"
+      const contadorRef = doc(db, 'contadores', `vales_servicio_${hoy}`);
       
-      const valesSnapshot = await getDocs(valesQuery);
-      let ultimoNumero = 0;
-      
-      // Buscar el número más alto
-      valesSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.codigo && data.codigo.startsWith('S-')) {
-          const numero = parseInt(data.codigo.replace('S-', ''));
-          if (!isNaN(numero) && numero > ultimoNumero) {
-            ultimoNumero = numero;
-          }
+      // Transacción para obtener y actualizar el contador diario
+      const nuevoNumero = await runTransaction(db, async (transaction) => {
+        const contadorSnap = await transaction.get(contadorRef);
+        let siguienteNumero;
+        
+        if (contadorSnap.exists()) {
+          siguienteNumero = contadorSnap.data().numero + 1;
+          transaction.update(contadorRef, { numero: siguienteNumero });
+        } else {
+          siguienteNumero = 1;
+          transaction.set(contadorRef, { numero: 1 });
         }
+        
+        return siguienteNumero;
       });
       
-      // Generar el siguiente número
-      const siguienteNumero = ultimoNumero + 1;
-      const codigoServicio = `S-${siguienteNumero.toString().padStart(3, '0')}`;
+      const codigoServicio = `S-${String(nuevoNumero).padStart(3, '0')}`;
 
       // Crear el vale directamente
       const valeRef = doc(collection(db, 'vales_servicio'));

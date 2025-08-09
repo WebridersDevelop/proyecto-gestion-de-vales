@@ -6,6 +6,15 @@ import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form, Badge, Butt
 import { useMediaQuery } from 'react-responsive';
 import React from 'react';
 
+function getHoyLocal() {
+  // Usar la fecha local del sistema directamente
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = String(hoy.getMonth() + 1).padStart(2, '0');
+  const day = String(hoy.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function AprobarValesServicio() {
   const { user, rol } = useAuth();
   const [valesServicio, setValesServicio] = useState([]);
@@ -44,11 +53,17 @@ function AprobarValesServicio() {
   // Remover timeout que interfería con el loading natural de Firebase
 
   useEffect(() => {
-    // Query simplificado - prioriza velocidad sobre ordenamiento perfecto
+    // Filtrar solo vales pendientes del día actual
+    const hoy = getHoyLocal(); // "YYYY-MM-DD"
+    const fechaDesde = new Date(hoy + 'T00:00:00');
+    const fechaHasta = new Date(hoy + 'T23:59:59');
+    
     const qServicio = query(
       collection(db, 'vales_servicio'),
       where('estado', '==', 'pendiente'),
-      limit(100) // Sin orderBy para evitar delays de índices
+      where('fecha', '>=', fechaDesde),
+      where('fecha', '<=', fechaHasta),
+      limit(50) // Solo vales del día actual
     );
     
     const unsub = onSnapshot(qServicio, snap => {
@@ -72,11 +87,17 @@ function AprobarValesServicio() {
   }, []);
 
   useEffect(() => {
-    // Query simplificado para vales de gasto pendientes
+    // Filtrar solo vales de gasto pendientes del día actual
+    const hoy = getHoyLocal(); // "YYYY-MM-DD"
+    const fechaDesde = new Date(hoy + 'T00:00:00');
+    const fechaHasta = new Date(hoy + 'T23:59:59');
+    
     const qGasto = query(
       collection(db, 'vales_gasto'),
       where('estado', '==', 'pendiente'),
-      limit(100) // Sin orderBy para respuesta instantánea
+      where('fecha', '>=', fechaDesde),
+      where('fecha', '<=', fechaHasta),
+      limit(50) // Solo vales del día actual
     );
     
     const unsub = onSnapshot(qGasto, snap => {
