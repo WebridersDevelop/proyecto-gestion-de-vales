@@ -1234,6 +1234,23 @@ function CuadreDiario() {
   const hoy = getHoyLocal();
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
+  
+  // Sistema híbrido de consultas: optimizado vs histórico
+  const esConsultaHistorica = () => {
+    return desde !== hoy || hasta !== hoy;
+  };
+  
+  const getLimiteConsulta = () => {
+    return esConsultaHistorica() ? 200 : 50; // Más datos para consultas históricas
+  };
+  
+  const getMensajeOptimizacion = () => {
+    if (esConsultaHistorica()) {
+      return "📚 Consulta histórica - Mayor consumo Firebase";
+    } else {
+      return "⚡ Consulta optimizada - Mínimo consumo Firebase";
+    }
+  };
 
   // --- FUNCION CORRECTA PARA MONTO PERCIBIDO ---
   function getMontoPercibido(vale) {
@@ -1288,6 +1305,7 @@ function CuadreDiario() {
     console.log(`📅 [DEBUG] Fecha desde objeto (Chile):`, fechaDesde);
     console.log(`📅 [DEBUG] Fecha hasta objeto (Chile):`, fechaHasta);
     console.log(`📅 [DEBUG] Zona horaria navegador:`, Intl.DateTimeFormat().resolvedOptions().timeZone);
+    console.log(`🔧 [DEBUG] ${getMensajeOptimizacion()} - Límite: ${getLimiteConsulta()}`);
     
     // Removida consulta temporal - límite aumentado a 500
     
@@ -1297,7 +1315,7 @@ function CuadreDiario() {
       where('fecha', '>=', fechaDesde),
       where('fecha', '<=', fechaHasta),
       orderBy('fecha', 'desc'),
-      limit(500) // TEMPORAL: Límite aumentado para ver todos los vales
+      limit(getLimiteConsulta()) // Sistema híbrido: 50 (hoy) o 200 (histórico)
     );
 
     unsub1 = onSnapshot(qServicio, 
@@ -1337,7 +1355,7 @@ function CuadreDiario() {
       where('fecha', '>=', fechaDesde),
       where('fecha', '<=', fechaHasta),
       orderBy('fecha', 'desc'),
-      limit(500) // TEMPORAL: Límite aumentado para ver todos los vales
+      limit(getLimiteConsulta()) // Sistema híbrido: 50 (hoy) o 200 (histórico)
     );
 
     unsub2 = onSnapshot(qGasto, snap => {
@@ -2206,6 +2224,28 @@ function CuadreDiario() {
                         </Form.Group>
                       </Col>
                     </Row>
+                    
+                    {/* Indicador de tipo de consulta */}
+                    {esConsultaHistorica() && (
+                      <Row className="mt-2">
+                        <Col>
+                          <Alert 
+                            variant="warning" 
+                            className="d-flex align-items-center py-2"
+                            style={{ 
+                              fontSize: 13, 
+                              borderRadius: 8,
+                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                              border: '1px solid #f59e0b',
+                              color: '#92400e'
+                            }}
+                          >
+                            <i className="bi bi-clock-history me-2" style={{ fontSize: 16 }}></i>
+                            📚 <strong>Consulta histórica activa</strong> - Mayor consumo Firebase ({getLimiteConsulta()} docs)
+                          </Alert>
+                        </Col>
+                      </Row>
+                    )}
                     
                     {/* Botones de fecha rápida */}
                     <Row className="mt-2">
