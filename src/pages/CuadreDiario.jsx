@@ -1210,17 +1210,18 @@ function CuadreDiario() {
   }
 
   function getFechaChile(fechaString, esInicio = true) {
-    // Crear fecha específica para zona horaria de Chile
-    // Chile está en UTC-3 (horario estándar) o UTC-4 (horario de verano)
+    // CORREGIDO: Crear fecha en UTC para evitar problemas de zona horaria
+    // Cuando el usuario selecciona "9 agosto", debe consultar exactamente "9 agosto"
     const [year, month, day] = fechaString.split('-');
     
     if (esInicio) {
-      // Inicio del día en Chile: 00:00:00 Chile time
-      // Crear fecha directamente sin conversión de zona horaria
-      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+      // Inicio del día en UTC: 00:00:00 UTC del día seleccionado
+      // Esto asegura que "9 agosto" consulte desde el inicio del 9 agosto UTC
+      return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0));
     } else {
-      // Final del día en Chile: 23:59:59 Chile time
-      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
+      // Final del día en UTC: 23:59:59 UTC del día seleccionado  
+      // Esto asegura que "9 agosto" consulte hasta el final del 9 agosto UTC
+      return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999));
     }
   }
 
@@ -1302,8 +1303,10 @@ function CuadreDiario() {
     const fechaDesde = getFechaChile(desde, true);  // Inicio del día Chile
     const fechaHasta = getFechaChile(hasta, false); // Final del día Chile
     console.log(`📅 [DEBUG] Cargando vales para fechas: ${desde} a ${hasta}`);
-    console.log(`📅 [DEBUG] Fecha desde objeto (Chile):`, fechaDesde);
-    console.log(`📅 [DEBUG] Fecha hasta objeto (Chile):`, fechaHasta);
+    console.log(`📅 [DEBUG] Fecha desde UTC:`, fechaDesde.toISOString());
+    console.log(`📅 [DEBUG] Fecha hasta UTC:`, fechaHasta.toISOString());
+    console.log(`📅 [DEBUG] Fecha desde local:`, fechaDesde.toLocaleString('es-CL'));
+    console.log(`📅 [DEBUG] Fecha hasta local:`, fechaHasta.toLocaleString('es-CL'));
     console.log(`📅 [DEBUG] Zona horaria navegador:`, Intl.DateTimeFormat().resolvedOptions().timeZone);
     console.log(`🔧 [DEBUG] ${getMensajeOptimizacion()} - Límite: ${getLimiteConsulta()}`);
     
