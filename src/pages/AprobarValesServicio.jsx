@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, updateDoc, doc, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, updateDoc, doc, onSnapshot, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Card, Row, Col, Table, Button, Alert, Spinner, Modal, Form, Badge, ButtonGroup } from 'react-bootstrap';
 import { useMediaQuery } from 'react-responsive';
@@ -13,6 +13,17 @@ function getHoyLocal() {
   const month = String(hoy.getMonth() + 1).padStart(2, '0');
   const day = String(hoy.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getFechaUTC(fechaString, esInicio = true) {
+  // Crear fecha en UTC para evitar problemas de zona horaria
+  const [year, month, day] = fechaString.split('-');
+  
+  if (esInicio) {
+    return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0));
+  } else {
+    return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999));
+  }
 }
 
 function AprobarValesServicio() {
@@ -34,7 +45,6 @@ function AprobarValesServicio() {
   // Nuevos estados para filtros y funcionalidades mejoradas
   const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos', 'servicio', 'gasto'
   const [filtroValor, setFiltroValor] = useState('todos'); // 'todos', 'alto', 'medio', 'bajo'
-  const [busqueda, setBusqueda] = useState('');
   const [filtroPeluquero, setFiltroPeluquero] = useState('todos'); // Nuevo filtro por peluquero
   const [filtroFecha, setFiltroFecha] = useState(''); // Nuevo filtro por fecha
   const [ordenamiento, setOrdenamiento] = useState('nuevo'); // 'nuevo', 'antiguo'
@@ -46,6 +56,28 @@ function AprobarValesServicio() {
   const [indiceActual, setIndiceActual] = useState(0);
   const [modoTarjeta, setModoTarjeta] = useState(false); // Empezar en modo tabla por defecto
 
+  // Sistema híbrido de consultas (similar a CuadreDiario)
+  const hoy = getHoyLocal();
+  const [fechaDesde, setFechaDesde] = useState(hoy);
+  const [fechaHasta, setFechaHasta] = useState(hoy);
+  
+  // Sistema híbrido de consultas: optimizado vs histórico
+  const esConsultaHistorica = () => {
+    return fechaDesde !== hoy || fechaHasta !== hoy;
+  };
+  
+  const getLimiteConsulta = () => {
+    return esConsultaHistorica() ? 100 : 50; // Más datos para consultas históricas
+  };
+  
+  const getMensajeOptimizacion = () => {
+    if (esConsultaHistorica()) {
+      return "📚 Consulta histórica - Mayor consumo Firebase";
+    } else {
+      return "⚡ Consulta optimizada - Solo vales de hoy";
+    }
+  };
+
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
   // ELIMINADO: Ya no forzamos tarjetas en móvil - tabla será predeterminada siempre
@@ -53,17 +85,19 @@ function AprobarValesServicio() {
   // Remover timeout que interfería con el loading natural de Firebase
 
   useEffect(() => {
-    // Filtrar solo vales pendientes del día actual
-    const hoy = getHoyLocal(); // "YYYY-MM-DD"
-    const fechaDesde = new Date(hoy + 'T00:00:00');
-    const fechaHasta = new Date(hoy + 'T23:59:59');
+    // Sistema híbrido: filtrar por rango de fechas seleccionado
+    const fechaDesdeUTC = getFechaUTC(fechaDesde, true);
+    const fechaHastaUTC = getFechaUTC(fechaHasta, false);
+    
+    console.log(`🔍 [APROBAR] Consultando vales pendientes: ${fechaDesde} a ${fechaHasta}`);
+    console.log(`🔧 [APROBAR] ${getMensajeOptimizacion()} - Límite: ${getLimiteConsulta()}`);
     
     const qServicio = query(
       collection(db, 'vales_servicio'),
       where('estado', '==', 'pendiente'),
-      where('fecha', '>=', fechaDesde),
-      where('fecha', '<=', fechaHasta),
-      limit(50) // Solo vales del día actual
+      where('fecha', '>=', fechaDesdeUTC),
+      where('fecha', '<=', fechaHastaUTC),
+      limit(getLimiteConsulta()) // Sistema híbrido de límites
     );
     
     const unsub = onSnapshot(qServicio, snap => {
@@ -84,20 +118,19 @@ function AprobarValesServicio() {
       setLoading(false); // ✅ Quitar loading cuando lleguen datos
     });
     return () => unsub();
-  }, []);
+  }, [fechaDesde, fechaHasta]); // Dependencias: re-ejecutar cuando cambien las fechas
 
   useEffect(() => {
-    // Filtrar solo vales de gasto pendientes del día actual
-    const hoy = getHoyLocal(); // "YYYY-MM-DD"
-    const fechaDesde = new Date(hoy + 'T00:00:00');
-    const fechaHasta = new Date(hoy + 'T23:59:59');
+    // Sistema híbrido: filtrar vales de gasto por rango de fechas seleccionado
+    const fechaDesdeUTC = getFechaUTC(fechaDesde, true);
+    const fechaHastaUTC = getFechaUTC(fechaHasta, false);
     
     const qGasto = query(
       collection(db, 'vales_gasto'),
       where('estado', '==', 'pendiente'),
-      where('fecha', '>=', fechaDesde),
-      where('fecha', '<=', fechaHasta),
-      limit(50) // Solo vales del día actual
+      where('fecha', '>=', fechaDesdeUTC),
+      where('fecha', '<=', fechaHastaUTC),
+      limit(getLimiteConsulta()) // Sistema híbrido de límites
     );
     
     const unsub = onSnapshot(qGasto, snap => {
@@ -118,31 +151,40 @@ function AprobarValesServicio() {
       setLoading(false); // ✅ Quitar loading cuando lleguen datos
     });
     return () => unsub();
-  }, []);
+  }, [fechaDesde, fechaHasta]); // Dependencias: re-ejecutar cuando cambien las fechas
 
-  // useEffect para extraer peluqueros únicos - OPTIMIZADO para evitar loops
+  // useEffect para cargar TODOS los usuarios de la base de datos
   useEffect(() => {
-    // Solo actualizar si realmente hay cambios
-    if (valesServicio.length === 0 && valesGasto.length === 0) return;
-    
-    const valesCombinados = [...valesServicio, ...valesGasto];
-    const peluquerosSet = new Set();
-    
-    valesCombinados.forEach(vale => {
-      const nombrePeluquero = vale.peluqueroNombre || vale.peluquero || 'Sin nombre';
-      const emailPeluquero = vale.peluqueroEmail || '';
-      peluquerosSet.add(JSON.stringify({ nombre: nombrePeluquero, email: emailPeluquero }));
-    });
-    
-    const peluquerosArray = Array.from(peluquerosSet).map(str => JSON.parse(str));
-    const sortedPeluqueros = peluquerosArray.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    
-    // Solo actualizar si hay cambios reales
-    setPeluquerosUnicos(prev => {
-      if (JSON.stringify(prev) === JSON.stringify(sortedPeluqueros)) return prev;
-      return sortedPeluqueros;
-    });
-  }, [valesServicio.length, valesGasto.length]); // Solo trigger en cambios de cantidad
+    const cargarTodosLosUsuarios = async () => {
+      try {
+        const usuariosSnap = await getDocs(collection(db, 'usuarios'));
+        const todosLosUsuarios = [];
+        
+        usuariosSnap.forEach(doc => {
+          const data = doc.data();
+          todosLosUsuarios.push({
+            uid: doc.id,
+            nombre: data.nombre || data.email || 'Sin nombre',
+            email: data.email || '',
+            rol: data.rol || 'sin rol'
+          });
+        });
+        
+        // Ordenar alfabéticamente por nombre
+        const usuariosOrdenados = todosLosUsuarios.sort((a, b) => 
+          a.nombre.localeCompare(b.nombre)
+        );
+        
+        setPeluquerosUnicos(usuariosOrdenados);
+        console.log(`👥 [APROBAR] Cargados ${usuariosOrdenados.length} usuarios de la base de datos`);
+        
+      } catch (error) {
+        console.error('Error cargando usuarios:', error);
+      }
+    };
+
+    cargarTodosLosUsuarios();
+  }, []); // Solo ejecutar una vez al montar el componente
 
   useEffect(() => {
     const valesCombinados = [...valesServicio, ...valesGasto];
@@ -170,9 +212,10 @@ function AprobarValesServicio() {
     if (filtroPeluquero !== 'todos') {
       const peluqueroSeleccionado = JSON.parse(filtroPeluquero);
       valesFiltrados = valesFiltrados.filter(vale => {
-        const nombreVale = vale.peluqueroNombre || vale.peluquero || 'Sin nombre';
-        const emailVale = vale.peluqueroEmail || '';
-        return nombreVale === peluqueroSeleccionado.nombre && emailVale === peluqueroSeleccionado.email;
+        // Filtrar por UID (más preciso) o por nombre/email como fallback
+        return vale.peluqueroUid === peluqueroSeleccionado.uid ||
+               vale.peluquero === peluqueroSeleccionado.nombre ||
+               vale.peluqueroEmail === peluqueroSeleccionado.email;
       });
     }
 
@@ -190,13 +233,6 @@ function AprobarValesServicio() {
       });
     }
 
-    // Búsqueda por texto (solo en servicio/concepto ahora, peluquero tiene su propio filtro)
-    if (busqueda) {
-      const termino = busqueda.toLowerCase();
-      valesFiltrados = valesFiltrados.filter(vale =>
-        (vale.servicio || vale.concepto || '').toLowerCase().includes(termino)
-      );
-    }
 
     // Ordenamiento
     const valesOrdenados = valesFiltrados.sort((a, b) => {
@@ -210,7 +246,7 @@ function AprobarValesServicio() {
     
     // Mejorar la lógica de loading
     setLoading(false);
-  }, [valesServicio, valesGasto, filtroTipo, filtroValor, busqueda, filtroPeluquero, filtroFecha, ordenamiento]);
+  }, [valesServicio, valesGasto, filtroTipo, filtroValor, filtroPeluquero, filtroFecha, ordenamiento]);
 
   const handleAccionVale = (vale, accion) => {
     setValeActual(vale);
@@ -505,20 +541,31 @@ function AprobarValesServicio() {
                     key={index} 
                     value={JSON.stringify(peluquero)}
                   >
-                    {peluquero.nombre} {peluquero.email && `(${peluquero.email})`}
+                    {peluquero.nombre} - {peluquero.rol} {peluquero.email && `(${peluquero.email})`}
                   </option>
                 ))}
               </Form.Select>
             </Col>
-            <Col lg={2} md={3} className="mb-3">
+            <Col lg={1} md={2} sm={6} className="mb-3">
               <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
-                <i className="bi bi-calendar me-2"></i>Fecha
+                <i className="bi bi-calendar me-1"></i>Desde
               </Form.Label>
               <Form.Control
                 type="date"
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value)}
-                style={{ borderRadius: 12 }}
+                value={fechaDesde}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                style={{ borderRadius: 12, fontSize: 14 }}
+              />
+            </Col>
+            <Col lg={1} md={2} sm={6} className="mb-3">
+              <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
+                <i className="bi bi-calendar-range me-1"></i>Hasta
+              </Form.Label>
+              <Form.Control
+                type="date"
+                value={fechaHasta}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                style={{ borderRadius: 12, fontSize: 14 }}
               />
             </Col>
             <Col lg={2} md={3} className="mb-3">
@@ -548,22 +595,10 @@ function AprobarValesServicio() {
             </Col>
           </Row>
 
-          {/* Segunda fila: Búsqueda y acciones */}
+          {/* Segunda fila: Acciones */}
           <Row className="align-items-end">
-            <Col md={6} className="mb-3">
-              <Form.Label style={{ fontWeight: 600, color: '#374151' }}>
-                <i className="bi bi-search me-2"></i>Búsqueda por servicio/concepto
-              </Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Buscar por servicio o concepto..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                style={{ borderRadius: 12 }}
-              />
-            </Col>
-            <Col md={4} className="mb-3">
-              {(filtroTipo !== 'todos' || filtroValor !== 'todos' || filtroPeluquero !== 'todos' || filtroFecha || busqueda) && (
+            <Col md={8} className="mb-3">
+              {(filtroTipo !== 'todos' || filtroValor !== 'todos' || filtroPeluquero !== 'todos' || filtroFecha || esConsultaHistorica()) && (
                 <Button
                   variant="outline-warning"
                   onClick={() => {
@@ -571,8 +606,9 @@ function AprobarValesServicio() {
                     setFiltroValor('todos');
                     setFiltroPeluquero('todos');
                     setFiltroFecha('');
-                    setBusqueda('');
                     setOrdenamiento('nuevo');
+                    setFechaDesde(hoy);
+                    setFechaHasta(hoy);
                   }}
                   style={{ borderRadius: 12, fontWeight: 600, width: '100%' }}
                 >
@@ -619,8 +655,60 @@ function AprobarValesServicio() {
               </div>
             </Col>
           </Row>
+          
+          {/* Botones de fecha rápida */}
+          <Row className="mt-2">
+            <Col>
+              <div className="d-flex gap-2 flex-wrap">
+                <Button 
+                  size="sm" 
+                  variant="outline-primary"
+                  onClick={() => {
+                    const hoyFecha = getHoyLocal();
+                    setFechaDesde(hoyFecha);
+                    setFechaHasta(hoyFecha);
+                  }}
+                  style={{ borderRadius: 8, fontSize: 12 }}
+                >
+                  Hoy
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline-secondary"
+                  onClick={() => {
+                    const ayer = new Date();
+                    ayer.setDate(ayer.getDate() - 1);
+                    const ayerStr = `${ayer.getFullYear()}-${String(ayer.getMonth() + 1).padStart(2, '0')}-${String(ayer.getDate()).padStart(2, '0')}`;
+                    setFechaDesde(ayerStr);
+                    setFechaHasta(ayerStr);
+                  }}
+                  style={{ borderRadius: 8, fontSize: 12 }}
+                >
+                  Ayer
+                </Button>
+              </div>
+            </Col>
+          </Row>
         </Card.Body>
       </Card>
+
+      {/* Indicador de tipo de consulta */}
+      {esConsultaHistorica() && (
+        <Alert 
+          variant="warning" 
+          className="d-flex align-items-center py-2 mb-3"
+          style={{ 
+            fontSize: 13, 
+            borderRadius: 8,
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            border: '1px solid #f59e0b',
+            color: '#92400e'
+          }}
+        >
+          <i className="bi bi-clock-history me-2" style={{ fontSize: 16 }}></i>
+          📚 <strong>Consulta histórica activa</strong> - Mayor consumo Firebase ({getLimiteConsulta()} docs max)
+        </Alert>
+      )}
 
       {/* Mensaje de notificación mejorado */}
       {mensaje && (
@@ -675,11 +763,6 @@ function AprobarValesServicio() {
                 {filtroFecha && (
                   <Badge bg="info" style={{ borderRadius: 8 }}>
                     Fecha: {new Date(filtroFecha).toLocaleDateString()}
-                  </Badge>
-                )}
-                {busqueda && (
-                  <Badge bg="info" style={{ borderRadius: 8 }}>
-                    Búsqueda: "{busqueda}"
                   </Badge>
                 )}
                 {ordenamiento !== 'nuevo' && (

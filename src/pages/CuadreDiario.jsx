@@ -1281,6 +1281,20 @@ function CuadreDiario() {
   useEffect(() => {
     if (!listenersActivos) return;
     
+    // SISTEMA ANTI-CONFLICTO FIREBASE: Prevenir internal assertion failed
+    console.log('🛡️ [ANTI-CONFLICT] Iniciando creación segura de listeners...');
+    
+    // Delay para evitar conflictos internos de Firebase
+    const timeoutId = setTimeout(() => {
+      createSafeListeners();
+    }, 200); // 200ms de pausa para limpieza interna Firebase
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [listenersActivos, desde, hasta]);
+
+  const createSafeListeners = () => {
     setLoading(true);
     let valesServicio = [];
     let valesGasto = [];
@@ -1410,11 +1424,18 @@ function CuadreDiario() {
     setUnsubscribers({ unsub1, unsub2 });
 
     return () => {
+      console.log('🧹 [ANTI-CONFLICT] Limpiando listeners de forma segura...');
       isMounted = false;
-      unsub1 && unsub1();
-      unsub2 && unsub2();
+      if (unsub1) {
+        unsub1();
+        console.log('🧹 [ANTI-CONFLICT] Listener vales_servicio limpiado');
+      }
+      if (unsub2) {
+        unsub2();
+        console.log('🧹 [ANTI-CONFLICT] Listener vales_gasto limpiado');
+      }
     };
-  }, [desde, hasta, listenersActivos]); // CRÍTICO: Re-ejecutar cuando cambien las fechas o listeners
+  }; // Fin de createSafeListeners
 
   const handleFiltro = (e) => {
     setFiltros({ ...filtros, [e.target.name]: e.target.value });
@@ -1423,16 +1444,23 @@ function CuadreDiario() {
   const handleEliminar = async (vale) => {
     if (window.confirm('¿Seguro que deseas eliminar este vale?')) {
       try {
-        // Pausar listeners temporalmente para evitar conflictos
-        console.log('🔄 Pausando listeners para eliminación...');
+        // SISTEMA ANTI-CONFLICTO AGRESIVO: Pausar listeners y forzar limpieza
+        console.log('🛡️ [ANTI-CONFLICT] Iniciando eliminación segura...');
         setListenersActivos(false);
         
-        // Cleanup listeners activos
-        if (unsubscribers.unsub1) unsubscribers.unsub1();
-        if (unsubscribers.unsub2) unsubscribers.unsub2();
+        // Cleanup forzado de listeners activos
+        if (unsubscribers.unsub1) {
+          unsubscribers.unsub1();
+          console.log('🧹 [ANTI-CONFLICT] Listener vales_servicio forzado a cerrar');
+        }
+        if (unsubscribers.unsub2) {
+          unsubscribers.unsub2();
+          console.log('🧹 [ANTI-CONFLICT] Listener vales_gasto forzado a cerrar');
+        }
         
-        // Esperar un poco para que se liberen los recursos
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // Esperar TIEMPO SUFICIENTE para que Firebase limpie internamente
+        console.log('⏳ [ANTI-CONFLICT] Esperando limpieza interna Firebase...');
+        await new Promise(resolve => setTimeout(resolve, 500)); // Aumentado a 500ms
         
         const collection = vale.tipo === 'Ingreso' ? 'vales_servicio' : 'vales_gasto';
         await deleteDoc(doc(db, collection, vale.id));
@@ -1442,11 +1470,11 @@ function CuadreDiario() {
         
         console.log(`✅ Vale eliminado: ${vale.id}`);
         
-        // Reactivar listeners después de un delay
+        // Reactivar listeners con delay más largo para evitar conflictos
         setTimeout(() => {
-          console.log('🔄 Reactivando listeners...');
+          console.log('🛡️ [ANTI-CONFLICT] Reactivando listeners de forma segura...');
           setListenersActivos(true);
-        }, 1000);
+        }, 1500); // Aumentado a 1.5 segundos
         
       } catch (error) {
         console.error('❌ Error al eliminar:', error);
@@ -2249,88 +2277,6 @@ function CuadreDiario() {
                         </Col>
                       </Row>
                     )}
-                    
-                    {/* Botones de fecha rápida */}
-                    <Row className="mt-2">
-                      <Col>
-                        <div className="d-flex gap-2 flex-wrap">
-                          <Button 
-                            size="sm" 
-                            variant="outline-primary"
-                            onClick={() => {
-                              const hoy = getHoyLocal();
-                              setDesde(hoy);
-                              setHasta(hoy);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            Hoy
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline-secondary"
-                            onClick={() => {
-                              const ayer = new Date();
-                              ayer.setDate(ayer.getDate() - 1);
-                              const ayerStr = getHoyLocal(ayer);
-                              setDesde(ayerStr);
-                              setHasta(ayerStr);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            Ayer
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline-secondary"
-                            onClick={() => {
-                              const fecha10 = '2025-08-10';
-                              setDesde(fecha10);
-                              setHasta(fecha10);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            10 Ago
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline-secondary"
-                            onClick={() => {
-                              const fecha11 = '2025-08-11';
-                              setDesde(fecha11);
-                              setHasta(fecha11);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            11 Ago
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline-secondary"
-                            onClick={() => {
-                              const fecha09 = '2025-08-09';
-                              setDesde(fecha09);
-                              setHasta(fecha09);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            09 Ago
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline-secondary"
-                            onClick={() => {
-                              const fecha08 = '2025-08-08';
-                              setDesde(fecha08);
-                              setHasta(fecha08);
-                            }}
-                            style={{ fontSize: 12, borderRadius: 8 }}
-                          >
-                            08 Ago
-                          </Button>
-                        </div>
-                      </Col>
-                    </Row>
                     
                     {/* Botones de rangos predefinidos */}
                     <Row className="mt-3">
