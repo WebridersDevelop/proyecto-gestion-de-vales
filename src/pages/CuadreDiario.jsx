@@ -1209,6 +1209,21 @@ function CuadreDiario() {
     return `${year}-${month}-${day}`;
   }
 
+  function getFechaChile(fechaString, esInicio = true) {
+    // Crear fecha específica para zona horaria de Chile
+    // Chile está en UTC-3 (horario estándar) o UTC-4 (horario de verano)
+    const [year, month, day] = fechaString.split('-');
+    
+    if (esInicio) {
+      // Inicio del día en Chile: 00:00:00 Chile time
+      // Crear fecha directamente sin conversión de zona horaria
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+    } else {
+      // Final del día en Chile: 23:59:59 Chile time
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
+    }
+  }
+
   function getFechaLocal(fecha) {
     // Convertir un objeto Date a formato YYYY-MM-DD en hora local
     const year = fecha.getFullYear();
@@ -1266,10 +1281,13 @@ function CuadreDiario() {
       }
     };
 
-    // Query optimizado: filtrar por fecha en servidor para reducir lecturas
-    const fechaDesde = new Date(desde + 'T00:00:00');
-    const fechaHasta = new Date(hasta + 'T23:59:59');
+    // Query optimizado: filtrar por fecha en servidor con zona horaria Chile
+    const fechaDesde = getFechaChile(desde, true);  // Inicio del día Chile
+    const fechaHasta = getFechaChile(hasta, false); // Final del día Chile
     console.log(`📅 [DEBUG] Cargando vales para fechas: ${desde} a ${hasta}`);
+    console.log(`📅 [DEBUG] Fecha desde objeto (Chile):`, fechaDesde);
+    console.log(`📅 [DEBUG] Fecha hasta objeto (Chile):`, fechaHasta);
+    console.log(`📅 [DEBUG] Zona horaria navegador:`, Intl.DateTimeFormat().resolvedOptions().timeZone);
     
     // Query con filtro de fecha en servidor - menos lecturas
     const qServicio = query(
@@ -1280,7 +1298,8 @@ function CuadreDiario() {
       limit(50) // Límite reducido porque filtramos en servidor
     );
 
-    unsub1 = onSnapshot(qServicio, snap => {
+    unsub1 = onSnapshot(qServicio, 
+      snap => {
       valesServicio = [];
       snap.forEach(doc => {
         const data = doc.data();
@@ -1302,6 +1321,11 @@ function CuadreDiario() {
       console.log(`📊 [DEBUG] CuadreDiario ValesServicio: ${snap.size} documentos (filtrado en servidor)`);
       
       updateVales();
+      setLoading(false);
+    }, error => {
+      console.error('❌ [ERROR] Query vales_servicio falló:', error);
+      console.error('❌ [ERROR] Fechas consultadas:', desde, 'a', hasta);
+      setError('Error al cargar vales de servicio: ' + error.message);
       setLoading(false);
     });
 
@@ -1336,6 +1360,11 @@ function CuadreDiario() {
       console.log(`📊 [DEBUG] CuadreDiario ValesGasto: ${snap.size} documentos (filtrado en servidor)`);
       
       updateVales();
+      setLoading(false);
+    }, error => {
+      console.error('❌ [ERROR] Query vales_gasto falló:', error);
+      console.error('❌ [ERROR] Fechas consultadas:', desde, 'a', hasta);
+      setError('Error al cargar vales de gasto: ' + error.message);
       setLoading(false);
     });
 
@@ -2229,6 +2258,30 @@ function CuadreDiario() {
                             style={{ fontSize: 12, borderRadius: 8 }}
                           >
                             11 Ago
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const fecha09 = '2025-08-09';
+                              setDesde(fecha09);
+                              setHasta(fecha09);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            09 Ago
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const fecha08 = '2025-08-08';
+                              setDesde(fecha08);
+                              setHasta(fecha08);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            08 Ago
                           </Button>
                         </div>
                       </Col>
