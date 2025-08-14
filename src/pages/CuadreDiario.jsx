@@ -1289,6 +1289,26 @@ function CuadreDiario() {
     console.log(`📅 [DEBUG] Fecha hasta objeto (Chile):`, fechaHasta);
     console.log(`📅 [DEBUG] Zona horaria navegador:`, Intl.DateTimeFormat().resolvedOptions().timeZone);
     
+    // CONSULTA TEMPORAL: Verificar si existen vales anteriores al 11 de agosto
+    console.log(`🔍 [TEMP] Verificando existencia de vales antes del 11 agosto...`);
+    const consultaTemporal = query(
+      collection(db, 'vales_servicio'),
+      where('fecha', '<', new Date(2025, 7, 11, 0, 0, 0)), // 11 agosto 2025
+      orderBy('fecha', 'desc'),
+      limit(5)
+    );
+    
+    getDocs(consultaTemporal).then(snap => {
+      console.log(`🔍 [TEMP] Encontrados ${snap.size} vales antes del 11 agosto:`);
+      snap.forEach(doc => {
+        const data = doc.data();
+        const fecha = data.fecha?.toDate ? data.fecha.toDate() : new Date(data.fecha);
+        console.log(`🔍 [TEMP] Vale: ${data.codigo || 'sin código'}, Fecha: ${fecha.toLocaleDateString()}, Peluquero: ${data.peluquero}`);
+      });
+    }).catch(err => {
+      console.error(`🔍 [TEMP] Error en consulta temporal:`, err);
+    });
+    
     // Query con filtro de fecha en servidor - menos lecturas
     const qServicio = query(
       collection(db, 'vales_servicio'),
