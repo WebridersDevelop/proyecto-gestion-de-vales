@@ -1200,12 +1200,12 @@ function CuadreDiario() {
   const [listenersActivos, setListenersActivos] = useState(true);
   const [unsubscribers, setUnsubscribers] = useState({ unsub1: null, unsub2: null });
   
-  function getHoyLocal() {
-    // Usar la fecha local del sistema directamente
-    const hoy = new Date();
-    const year = hoy.getFullYear();
-    const month = String(hoy.getMonth() + 1).padStart(2, '0');
-    const day = String(hoy.getDate()).padStart(2, '0');
+  function getHoyLocal(fecha = null) {
+    // Usar la fecha proporcionada o la fecha local del sistema
+    const fechaBase = fecha || new Date();
+    const year = fechaBase.getFullYear();
+    const month = String(fechaBase.getMonth() + 1).padStart(2, '0');
+    const day = String(fechaBase.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
 
@@ -2148,7 +2148,6 @@ function CuadreDiario() {
                           <Form.Control
                             type="date"
                             value={desde}
-                            max={hasta}
                             onChange={e => setDesde(e.target.value)}
                             style={{ 
                               borderRadius: 12,
@@ -2166,7 +2165,6 @@ function CuadreDiario() {
                           <Form.Control
                             type="date"
                             value={hasta}
-                            min={desde}
                             onChange={e => setHasta(e.target.value)}
                             style={{ 
                               borderRadius: 12,
@@ -2175,6 +2173,64 @@ function CuadreDiario() {
                             }}
                           />
                         </Form.Group>
+                      </Col>
+                    </Row>
+                    
+                    {/* Botones de fecha rápida */}
+                    <Row className="mt-2">
+                      <Col>
+                        <div className="d-flex gap-2 flex-wrap">
+                          <Button 
+                            size="sm" 
+                            variant="outline-primary"
+                            onClick={() => {
+                              const hoy = getHoyLocal();
+                              setDesde(hoy);
+                              setHasta(hoy);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            Hoy
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const ayer = new Date();
+                              ayer.setDate(ayer.getDate() - 1);
+                              const ayerStr = getHoyLocal(ayer);
+                              setDesde(ayerStr);
+                              setHasta(ayerStr);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            Ayer
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const fecha10 = '2025-08-10';
+                              setDesde(fecha10);
+                              setHasta(fecha10);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            10 Ago
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline-secondary"
+                            onClick={() => {
+                              const fecha11 = '2025-08-11';
+                              setDesde(fecha11);
+                              setHasta(fecha11);
+                            }}
+                            style={{ fontSize: 12, borderRadius: 8 }}
+                          >
+                            11 Ago
+                          </Button>
+                        </div>
                       </Col>
                     </Row>
                     
